@@ -1,3 +1,5 @@
+/*! \file ets_demo.cc */
+
 #include <vector>
 #include <set>
 #include <string>
@@ -669,9 +671,12 @@ void subprocess (const vector<Target> &tgt, const pointing &center0,
       fout << "Exposure " << cnt << ": duration " << time << "s, "
         "RA: " << rad2degr*center.phi << ", DEC " << 90-rad2degr*center.theta
         << " PA: " << rad2degr*posang << endl
-        << "  Target     Fiber" << endl;
+        << "  Target     Fiber        RA       DEC" << endl;
       for (size_t i=0; i<tidmax.size(); ++i)
-        fout << setw(8) << tgt1[tidmax[i]].id << setw(10) << fidmax[i]+1 << endl;
+        fout << setw(8) << tgt1[tidmax[i]].id << setw(10) << fidmax[i]+1
+        << fixed << setw(10) << setprecision(5) << tgt1[tidmax[i]].pos.x
+        << fixed << setw(10) << setprecision(5) << tgt1[tidmax[i]].pos.y
+        << endl;
       }
     cout << setw(6) << cnt++
          << fixed << setw(18) << setprecision(5) << tidmax.size()/2394.
