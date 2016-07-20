@@ -1,3 +1,26 @@
+/*
+ *  This file is part of ets_fiber_assigner.
+ *
+ *  ets_finer_assigner is free software; you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) any later version.
+ *
+ *  ets_finer_assigner is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with ets_finer_assigner; if not, write to the Free Software
+ *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+ */
+
+/*
+ *  ets_finer_assigner is being developed at the Max-Planck-Institut fuer
+ *  Astrophysik.
+ */
+
 /*! \file ets_demo.cc */
 
 #include <vector>
@@ -608,6 +631,7 @@ void optimal_exposure(const vector<Target> &tgt, pointing &center,
   else
     vdx.Normalize();
   vec3 vdy=crossprod(vcenter,vdx);
+  //FIXME: make this user-definable!
   for (int dx=-4; dx<=4; ++dx)
     for (int dy=-4; dy<=4; ++dy)
       for (int da=-4; da<=4; ++da)
@@ -672,6 +696,7 @@ void subprocess (const vector<Target> &tgt, const pointing &center0,
         "RA: " << rad2degr*center.phi << ", DEC " << 90-rad2degr*center.theta
         << " PA: " << rad2degr*posang << endl
         << "  Target     Fiber        RA       DEC" << endl;
+      //FIXME: add PFI coordinates
       for (size_t i=0; i<tidmax.size(); ++i)
         fout << setw(8) << tgt1[tidmax[i]].id << setw(10) << fidmax[i]+1
         << fixed << setw(10) << setprecision(5) << tgt1[tidmax[i]].pos.x
