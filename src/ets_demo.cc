@@ -432,6 +432,7 @@ pqueue<pq_entry> calc_pri(const vector<Target> &tgt,
     if (t2f[i].size()>0)
       {
       vector<size_t> ngb = raster.query(tgt[i].pos,r_kernel);
+
       for (auto j : ngb)
         {
         if (i==j)
@@ -479,6 +480,18 @@ class FiberAssigner
     virtual ~FiberAssigner() {}
   };
 
+int maxpri_in_fiber (size_t fiber, const vector<Target> &tgt,
+  const vector<vector<size_t>> &f2t)
+  {
+  planck_assert(!f2t[fiber].empty(), "searching in empty fiber");
+  size_t idx=0;
+  int maxpri = tgt[f2t[fiber][idx]].pri;
+  for (size_t j=1; j<f2t[fiber].size(); ++j)
+    if (tgt[f2t[fiber][idx]].pri<maxpri)
+      { maxpri=tgt[f2t[fiber][idx]].pri; idx=j; }
+  return f2t[fiber][idx];
+  }
+
 class NaiveAssigner: public FiberAssigner
   {
   /*! Naive assignment algorithm: iterate over all fibers, and if a fiber has
@@ -492,16 +505,10 @@ class NaiveAssigner: public FiberAssigner
     vector<vector<size_t>> f2t,t2f;
     calcMappings(tgt,raster,f2t,t2f);
 
-    for (size_t i=0; i<f2t.size(); ++i)
+    for (size_t fiber=0; fiber<f2t.size(); ++fiber)
       {
-      if (f2t[i].empty()) continue;
-      size_t fiber=i;
-      size_t idx=0;
-      int maxpri = tgt[f2t[fiber][idx]].pri;
-      for (size_t j=1; j<f2t[fiber].size(); ++j)
-        if (tgt[f2t[fiber][idx]].pri<maxpri)
-          { maxpri=tgt[f2t[fiber][idx]].pri; idx=j; }
-      int itgt=f2t[fiber][idx];
+      if (f2t[fiber].empty()) continue;
+      int itgt = maxpri_in_fiber(fiber,tgt,f2t);
       tid.push_back(itgt);
       fid.push_back(fiber);
       cleanup (tgt, raster, f2t, t2f, fiber, itgt);
@@ -523,20 +530,19 @@ class DrainingAssigner: public FiberAssigner
     vector<vector<size_t>> f2t,t2f;
     calcMappings(tgt,raster,f2t,t2f);
 
+    size_t maxtgt=0;
+    for (const auto &f:f2t)
+      maxtgt=max(maxtgt,f.size());
+
     while (true)
       {
       int fiber=-1;
-      size_t mintgt=10000;
+      size_t mintgt=maxtgt+1;
       for (size_t i=0; i<f2t.size(); ++i)
         if ((f2t[i].size()<mintgt)&&(f2t[i].size()>0))
           { fiber=i; mintgt=f2t[i].size(); }
       if (fiber==-1) break; // assignment done
-      size_t idx=0;
-      int maxpri = tgt[f2t[fiber][idx]].pri;
-      for (size_t j=1; j<f2t[fiber].size(); ++j)
-        if (tgt[f2t[fiber][idx]].pri<maxpri)
-          { maxpri=tgt[f2t[fiber][idx]].pri; idx=j; }
-      int itgt=f2t[fiber][idx];
+      int itgt = maxpri_in_fiber(fiber,tgt,f2t);
       tid.push_back(itgt);
       fid.push_back(fiber);
       cleanup(tgt,raster,f2t,t2f,fiber,itgt);
@@ -562,12 +568,10 @@ class NewAssigner: public FiberAssigner
 
     while (true)
       {
-      if (pri.top_priority().pri==100000) break;
+      if (pri.top_priority().pri==(1<<30)) break;
       size_t itgt=pri.top();
-      if (pri.top_priority().prox<=0.)
-        { pri.set_priority(pq_entry(0.,100000),itgt); continue; }
       if (t2f[itgt].empty())
-        { pri.set_priority(pq_entry(0.,100000),itgt); continue; }
+        { pri.set_priority(pq_entry(0.,(1<<30)),itgt); continue; }
       size_t ifib=0, mintgt=f2t[t2f[itgt][ifib]].size();
       for (size_t i=1; i<t2f[itgt].size(); ++i)
         if (f2t[t2f[itgt][i]].size()<mintgt)
@@ -616,14 +620,12 @@ void single_exposure(const vector<Target> &tgt, const pointing &center,
 
 } // unnamed namespace
 
-void optimal_exposure(const vector<Target> &tgt, pointing &center,
-  double &posang, double elevation, const FiberAssigner &ass,
-  vector<size_t> &tid, vector<size_t> &fid)
+void optimal_exposure(const vector<Target> &tgt, pointing &center, double dptg,
+  int nptg, double &posang, double dposang, int nposang, double elevation,
+  const FiberAssigner &ass, vector<size_t> &tid, vector<size_t> &fid)
   {
   double posang0=posang;
   tid.clear(); fid.clear();
-  // construct shift vectors
-  double shift=degr2rad/320.; // should roughly correspond to 1mm in PFI plane
   vec3 vcenter(center);
   vec3 vdx=crossprod(vcenter,vec3(0,0,1));
   if (vdx.SquaredLength()==0.) // center lies at a pole
@@ -632,12 +634,15 @@ void optimal_exposure(const vector<Target> &tgt, pointing &center,
     vdx.Normalize();
   vec3 vdy=crossprod(vcenter,vdx);
   //FIXME: make this user-definable!
-  for (int dx=-4; dx<=4; ++dx)
-    for (int dy=-4; dy<=4; ++dy)
-      for (int da=-4; da<=4; ++da)
+  for (int idx=0; idx<nptg; ++idx)
+    for (int idy=0; idy<nptg; ++idy)
+      for (int ida=0; ida<nposang; ++ida)
         {
-        pointing newcenter(vcenter+(vdx*dx+vdy*dy)*shift);
-        double newposang=posang0+degr2rad*da;
+        double dx=-dptg+2*dptg*(idx+0.5)/nptg;
+        double dy=-dptg+2*dptg*(idy+0.5)/nptg;
+        double da=-dposang+2*dposang*(ida+0.5)/nposang;
+        pointing newcenter(vcenter+(vdx*dx+vdy*dy));
+        double newposang=posang0+da;
         vector<size_t> tid2,fid2;
         single_exposure (tgt, newcenter, newposang, elevation, ass, tid2, fid2);
         if (tid2.size()>tid.size())
@@ -665,9 +670,22 @@ void strip (vector<Target> &tgt, const vector<size_t> &remove, double time)
   tgt.swap(t2);
   }
 
+template<typename T> string toString(const T&val, int w)
+  {
+  ostringstream o;
+  o<<setw(w)<<val;
+  return o.str();
+  }
+template<typename T> string toString(const T&val, int w, int p)
+  {
+  ostringstream o;
+  o<<fixed<<setw(w)<<setprecision(p)<<val;
+  return o.str();
+  }
+
 void subprocess (const vector<Target> &tgt, const pointing &center0,
-  double posang0, double elevation, double fract,
-  ofstream &fout, const FiberAssigner &ass)
+  double dptg, int nptg, double posang0, double dposang, int nposang,
+  double elevation, double fract, ofstream &fout, const FiberAssigner &ass)
   {
   vector<Target> tgt1=tgt;
   double ttime=0., acc=0., time2=0.;
@@ -683,7 +701,8 @@ void subprocess (const vector<Target> &tgt, const pointing &center0,
     pointing center(center0);
     double posang(posang0);
     vector<size_t> tidmax, fidmax;
-    optimal_exposure(tgt1, center, posang, elevation, ass, tidmax, fidmax);
+    optimal_exposure(tgt1, center, dptg, nptg, posang, dposang, nposang,
+      elevation, ass, tidmax, fidmax);
     if (tidmax.empty()) break; // stop if no more fibers could be assigned
     double time=tgt1[tidmax[0]].time;
     for (const auto i: tidmax)
@@ -698,15 +717,18 @@ void subprocess (const vector<Target> &tgt, const pointing &center0,
         << "  Target     Fiber        RA       DEC" << endl;
       //FIXME: add PFI coordinates
       for (size_t i=0; i<tidmax.size(); ++i)
-        fout << setw(8) << tgt1[tidmax[i]].id << setw(10) << fidmax[i]+1
-        << fixed << setw(10) << setprecision(5) << tgt1[tidmax[i]].pos.x
-        << fixed << setw(10) << setprecision(5) << tgt1[tidmax[i]].pos.y
+        fout << toString(tgt1[tidmax[i]].id,8) << toString(fidmax[i]+1,10)
+        << toString(tgt1[tidmax[i]].pos.x,10,5)
+        << toString(tgt1[tidmax[i]].pos.y,10,5)
         << endl;
       }
-    cout << setw(6) << cnt++
-         << fixed << setw(18) << setprecision(5) << tidmax.size()/2394.
-         << fixed << setw(28) << setprecision(5) << acc/ttime
-         << fixed << setw(20) << setprecision(0) << time2 << endl;
+    cout << toString(cnt++,6)
+         << toString(tidmax.size()/2394.,18,5)
+         << toString(acc/ttime,28,5)
+         << toString(time2,20,0) << endl;
+    cout << toString(rad2degr*center.phi,12,8) << " "
+         << toString(90-rad2degr*center.theta,12,8) << " "
+         << toString(posang*rad2degr,12,8) << endl;
     if (acc/ttime>fract) break;
     strip (tgt1,tidmax,time);
     }
@@ -752,7 +774,8 @@ vector<Target> readTargets (const string &name)
   }
 
 void process(const string &name, double fract,
-  const pointing &center, double posang, const string &out,
+  const pointing &center, double dptg, int nptg, double posang, double dposang,
+  int nposang, const string &out,
   const FiberAssigner &ass)
   {
   double elevation=0; /*ignored for the moment */
@@ -768,7 +791,8 @@ void process(const string &name, double fract,
   ofstream fout;
   if (out!="")
     { fout.open(out); planck_assert(fout,"error opening output file"); }
-  subprocess (tgt, center, posang, elevation, fract, fout, ass);
+  subprocess (tgt, center, dptg, nptg, posang, dposang, nposang, elevation,
+    fract, fout, ass);
   }
 
 /*! Finds the smallest circle enclosing all locations in \a tgt and returns
@@ -813,7 +837,11 @@ int main(int argc, const char ** argv)
     center=pointing(getCenter(readTargets(params.find<string>("input"))));
 
   double posang=degr2rad*params.find<double>("posang",0.);
+  double dposang=degr2rad*params.find<double>("dposang",4.);
+  int nposang=params.find<int>("nposang",5);
+  double dptg=degr2rad*params.find<double>("dptg",4./320.);// should roughly correspond to 4mm in PFI plane
+  int nptg=params.find<int>("nptg",5);
   process (params.find<string>("input"),
-    params.find<double>("fract"),center,posang,
+    params.find<double>("fract"),center,dptg,nptg,posang,dposang,nposang,
     params.find<string>("output",""),*pass);
   }
