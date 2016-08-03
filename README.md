@@ -40,7 +40,7 @@ pointing (in degrees). If not specified, the code will use the geometrical
 center of the input data.
 
 - "posang" is an optional parameter specifying the desired position angle (in
-degrees)of the PFS. If unspecified, it is assumed to be 0.
+degrees) of the PFS. If unspecified, it is assumed to be 0.
 
 - "dposang" is an optional parameter describing the maximum deviation (in degrees)
 from the specified position angle when searching for the optimal telescope
@@ -68,7 +68,7 @@ easily.
 For each exposure, the code
 - determines which targets are observed with which fibers
   (this depends on the concrete assigner selected by the user)
-  This is repeated several times with the telescope shifted by small amounts in
+  This is repeated nptg*nptg*nposang times with the telescope shifted by small amounts in
   x and y directions, and rotating the PFS by small amounts, and the attempt
   with the most assigned fibers is chosen.
   The exposure time is the minimum remaining observation time of all assigned
@@ -97,10 +97,10 @@ Target priorities are taken into account by the assignment algorithms.
 
 3. New:
   - While targets are still visible with any fiber:
-    - compute an importance function for every target, that depends on number and
+    - compute an importance function for every target, which depends on number and
       proximity of nearby targets and on the target's remaining observation time.
     - from the list of visible targets with the highest priority, assign the target
-      with the highest importance to a fiber. If multiple fibers can se the target,
+      with the highest importance to a fiber. If multiple fibers can see the target,
       choose the fiber with the lowest number of potential targets.
 
 In case of any questions, please don't hesitate to contact me
