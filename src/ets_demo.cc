@@ -183,7 +183,7 @@ template <typename T, typename Compare=std::less<T>> class pqueue
     size_t top() const
       { return idx[1]; }
   };
-
+constexpr size_t nfiber=3*57*14;
 constexpr double rmax=4.75; // maximum radius of a fiber patrol area
 constexpr double r_kernel=4.75; // radius of the priority function kernel
 constexpr double dotdist=1.375; // radius of the dot blocking area
@@ -363,8 +363,8 @@ void checkMappings (const vector<Target> &tgt,
 void calcMappings (const vector<Target> &tgt, const fpraster &raster,
   vector<vector<size_t>> &f2t, vector<vector<size_t>> &t2f)
   {
-  f2t=vector<vector<size_t>>(3*57*14);
-  for (int i=0; i<3*57*14; ++i)
+  f2t=vector<vector<size_t>>(nfiber);
+  for (int i=0; i<nfiber; ++i)
     {
     vec2 fp=id2fiberpos(i), dp=id2dotpos(i);
     vector<size_t> tmp=raster.query(fp,rmax);
@@ -588,7 +588,7 @@ class NewAssigner: public FiberAssigner
 /*! Discard targets that are too far away from the PFS. */
 vector<size_t> select_observable (const vector<Target> &tgt, double safety)
   {
-  vector<vec2> fpos(3*57*14);
+  vector<vec2> fpos(nfiber);
   for (size_t i=0; i<fpos.size(); ++i) fpos[i]=id2fiberpos(i);
   fpraster raster(fpos,100,100);
   vector<size_t> res;
@@ -723,7 +723,7 @@ void subprocess (const vector<Target> &tgt, const pointing &center0,
         << endl;
       }
     cout << toString(cnt++,6)
-         << toString(tidmax.size()/2394.,18,5)
+         << toString(tidmax.size()/double(nfiber),18,5)
          << toString(acc/ttime,28,5)
          << toString(time2,20,0) << endl;
     cout << toString(rad2degr*center.phi,12,8) << " "
