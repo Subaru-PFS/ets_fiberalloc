@@ -68,7 +68,7 @@ easily.
 For each exposure, the code
 - determines which targets are observed with which fibers
   (this depends on the concrete assigner selected by the user)
-  This is repeated nptg*nptg*nposang times with the telescope shifted by small amounts in
+  This is repeated nptg x nptg x nposang times with the telescope shifted by small amounts in
   x and y directions, and rotating the PFS by small amounts, and the attempt
   with the most assigned fibers is chosen.
   The exposure time is the minimum remaining observation time of all assigned
