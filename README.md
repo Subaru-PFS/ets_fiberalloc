@@ -24,13 +24,13 @@ The algorithms are documented in the source code.
 - "fract" is the fraction of coverage that must be reached before the algorithm
 stops. It is computed like this:
 
-total_time := sum over all sources to be observed times their planned
-              observation time
+  total_time := sum over all sources to be observed times their planned
+                observation time
 
-obs_time   := sum over all sources observed so far times their observation time
-              so far
+  obs_time   := sum over all sources observed so far times their observation time
+                so far
 
-fract := obs_time/total_time
+  fract := obs_time/total_time
 
 - "output" is an optional parameter. If present, it is the name of a file into
 which detailed fiber assignment data is written.
@@ -87,21 +87,21 @@ Target priorities are taken into account by the assignment algorithms.
 ### Short description of the assigner algorithms:
 
 1. Naive:
-- For each fiber, assign the target with the highest priority visible with this
-fiber.
+  - For each fiber, assign the target with the highest priority visible with this
+    fiber.
 
 2. Draining:
-- While targets are still visible with any fiber:
-  - find the fiber with the lowest number of visible targets, and assign the
-    visible target with the highest prioity to it
+  - While targets are still visible with any fiber:
+    - find the fiber with the lowest number of visible targets, and assign the
+      visible target with the highest prioity to it
 
 3. New:
-- While targets are still visible with any fiber:
-  - compute an importance function for every target, that depends on number and
-    proximity of nearby targets and on the target's remaining observation time.
-  - from the list of visible targets with the highest priority, assign the target
-    with the highest importance to a fiber. If multiple fibers can se the target,
-    choose the fiber with the lowest number of potential targets.
+  - While targets are still visible with any fiber:
+    - compute an importance function for every target, that depends on number and
+      proximity of nearby targets and on the target's remaining observation time.
+    - from the list of visible targets with the highest priority, assign the target
+      with the highest importance to a fiber. If multiple fibers can se the target,
+      choose the fiber with the lowest number of potential targets.
 
 In case of any questions, please don't hesitate to contact me
 (martin@mpa-garching.mpg.de)!
