@@ -32,10 +32,21 @@ fract := obs_time/total_time
 "output" is an optional parameter. If present, it is the name of a file into
 which detailed fiber assignment data is written.
 "ra" and "dec" are optional parameters specifying the approximate telescope
-pointing (in degrees). Is not specified, the code will use the geometrical
+pointing (in degrees). If not specified, the code will use the geometrical
 center of the input data.
-"posang" is anoptional parameter specifying the desired position angle of the
-PFS. If unspecified, it is assumed to be 0.
+"posang" is an optional parameter specifying the desired position angle (in
+degrees)of the PFS. If unspecified, it is assumed to be 0.
+"dposang" is an optional parameter describing the maximum deviation (in degrees)
+from the specified position angle when searching for the optimal telescope
+orientation. Default is 4 degrees.
+"nposang" is the number of different position angles tried (in the range
+posang+-dposang) when searching for the optimal telescope orientation.
+Default is 5.
+"dptg" is an optional parameter describing the maximum deviation (in millimeters
+on the PFI plane) from the specified RA/DEC when searching for the optimal
+telescope pointing. Default is 4 degrees.
+"nptg" is the number of different pointings tried (in both directions)
+when searching for the optimal telescope pointing. Default is 5.
 
 The code first loads the required data set, and then runs the fiber assignment
 algorithm assuming that the telescope points at the specified position
@@ -61,6 +72,26 @@ At each step, the fraction of allocated fibers and the fraction of obervations
 done so far and the necessary observations is printed.
 
 Target priorities are taken into account by the assignment algorithms.
+
+Short description of the assigner algorithms:
+---------------------------------------------
+
+Naive:
+For each fiber, assign the target with the highest priority visible with this
+fiber.
+
+Draining:
+While targets are still visible with any fiber:
+- find the fiber with the lowest number of visible targets, and assign the
+  visible target with the highest prioity to it
+
+New:
+While targets are still visible with any fiber:
+- compute an importance function for every target, that depends on number and
+  proximity of nearby targets and on the target's remaining observation time.
+- from the list of visible targets with the highest priority, assign the target
+  with the highest importance to a fiber. If multiple fibers can se the target,
+  choose the fiber with the lowest number of potential targets.
 
 In case of any questions, please don't hesitate to contact me
 (martin@mpa-garching.mpg.de)!
