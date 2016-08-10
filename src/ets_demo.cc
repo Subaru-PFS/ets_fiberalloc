@@ -30,6 +30,7 @@
 #include <iomanip>
 #include <fstream>
 #include <memory>
+#include <regex>
 
 #include "error_handling.h"
 #include "string_utils.h"
@@ -364,7 +365,7 @@ void calcMappings (const vector<Target> &tgt, const fpraster &raster,
   vector<vector<size_t>> &f2t, vector<vector<size_t>> &t2f)
   {
   f2t=vector<vector<size_t>>(nfiber);
-  for (int i=0; i<nfiber; ++i)
+  for (size_t i=0; i<nfiber; ++i)
     {
     vec2 fp=id2fiberpos(i), dp=id2dotpos(i);
     vector<size_t> tmp=raster.query(fp,rmax);
@@ -812,6 +813,99 @@ vec3 getCenter(const vector<Target> &tgt)
   return res;
   }
 
+#if 0
+double greg2julian (int y, int m, int d)
+  {
+  if (m<=2) // Jan, Feb
+    { --y; m+=12; }
+  int a=y/100;
+  int b=a/4;
+  int c=2-a+b;
+  int e=365.25*(y+4716);
+  int f=30.6001*(m+1);
+  return c+d+e+f-1524.5;
+  }
+
+void julian2greg (double jd, int *year, int *month, int *day)
+  {
+  double q=jd+0.5;
+  int z=(int) q;
+  int w=(z-1867216.25)/36524.25;
+  int x=w/4;
+  int a=z+1+w-x;
+  int b=a+1524;
+  int c=(b-122.1)/365.25;
+  int d=365.25*c;
+  int e=(b-d)/30.6001;
+  int f=30.6001*e;
+  *day=b-d-f+(q-z);
+  *month=e-1; if (*month>12) month-=12;
+  *year=c-4716; if (*month<=2) (*year)++;
+  }
+
+double jd2gmst (double jd)
+  {
+  double jd0=(int)(jd+0.5)-0.5;
+  double h=(jd-jd0)*24;
+  double d=jd-2451545.0;
+  double d0=jd0-2451545.0;
+  double t=d/36525.;
+  double res = 6.697374558 + 0.06570982441908*d0 + 1.00273790935*h + 0.000026*t*t;
+  return fmodulo(res,24.);
+  }
+
+double jd2gast (double jd)
+  {
+  double gmst=jd2gmst(jd);
+  double d=jd-2451545.0;
+  double omega=125.04-0.052954*d;
+  double l = 280.47 + 0.98565*d;
+  double eps = 23.4393 - 0.0000004*d;
+  double dpsi=-0.000319*sin(omega*degr2rad) - 0.000024*sin(2*l*degr2rad);
+  double res=gmst+dpsi*cos(eps*degr2rad);
+  return fmodulo(res,24.);
+  }
+double jd2gmst_approx (double jd)
+  {
+  double res = 18.697374558 + 24.06570982441908*(jd-2451545.0);
+  return fmodulo(res,24.);
+  }
+
+double gmst2ha (double gmst, double lon, double ra) // time in h, angles in rad
+  {
+  return fmodulo(gmst*15*degr2rad+lon-ra, twopi);
+  }
+double iso8601toJD (const std::string &datetime)
+  {
+  regex reg_date(R"foo(^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})Z$)foo");
+  std::smatch match;
+  planck_assert(regex_search(datetime,match,reg_date),"unknown date format");
+  planck_assert(match.size()==7,"unexpected number of matches");
+  double jd0=greg2julian(stringToData<int>(match[1]),
+                         stringToData<int>(match[2]),
+                         stringToData<int>(match[3]));
+  jd0 += stringToData<int>(match[4])/24. + 
+         stringToData<int>(match[5])/(24.*60.) + 
+         stringToData<double>(match[6])/(24.*60.*60.);
+  return jd0;
+  }
+
+void transformtest ()
+  {
+  double jd=iso8601toJD("2004-04-06T21:00:00Z");
+  double lat=42*degr2rad;
+  double lon=-71*degr2rad;
+  double ra=3*15*degr2rad;
+  double decl=24*degr2rad;
+  double gmst=jd2gmst(jd);
+  double ha=gmst2ha (gmst,lon,ra);
+  double alt=asin(sin(decl)*sin(lat)+cos(decl)*cos(lat)*cos(ha));
+  double az=acos((sin(decl)-sin(alt)*sin(lat))/(cos(alt)*cos(lat)));
+  if (sin(ha)>0) az=twopi-az;
+  cout << dataToString(alt*rad2degr) << endl;
+  cout << dataToString(az*rad2degr) << endl;
+  }
+#endif
 } // unnamed namespace
 
 int main(int argc, const char ** argv)
