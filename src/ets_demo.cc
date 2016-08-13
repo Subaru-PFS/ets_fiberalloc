@@ -38,6 +38,7 @@
 #include "lsconstants.h"
 #include "pointing.h"
 #include "paramfile.h"
+#include "rotmatrix.h"
 
 using namespace std;
 
@@ -890,15 +891,50 @@ double iso8601toJD (const std::string &datetime)
   return jd0;
   }
 
+void precess (double &ra, double &dec, double equinox1, double equinox2)
+  {
+  const double sec2rad=degr2rad/3600.;
+  vec3 x(pointing(halfpi-dec, ra));
+  double t = 1e-3*(equinox2-equinox1);
+  double st = 1e-3*(equinox1-2000.);
+  double A=sec2rad*t*(23062.181 + st*(139.656 +0.0139*st)
+    + t*(30.188 - 0.344*st+17.998*t));
+  double B=sec2rad*t*t*(79.280 + 0.410*st + 0.205*t) + A;
+  double C=sec2rad*t*(20043.109 - st*(85.33 + 0.217*st)
+    + t*(-42.665 - 0.217*st -41.833*t));
+
+  double sina = sin(A), sinb = sin(B), sinc = sin(C),
+         cosa = cos(A), cosb = cos(B), cosc = cos(C);
+
+  rotmatrix r(
+    vec3( cosa*cosb*cosc-sina*sinb,sina*cosb+cosa*sinb*cosc, cosa*sinc),
+    vec3(-cosa*sinb-sina*cosb*cosc,cosa*cosb-sina*sinb*cosc,-sina*sinc),
+    vec3(-cosb*sinc, -sinb*sinc, cosc));
+
+  vec3 x2 = r.Transform(x); //rotate to get output direction cosines
+
+  pointing ptg(x2);
+  ra = ptg.phi;
+  ra += (ra<0.)*twopi;
+  dec= halfpi-ptg.theta;
+  }
+
 void transformtest ()
   {
-  double jd=iso8601toJD("2004-04-06T21:00:00Z");
-  double lat=42*degr2rad;
-  double lon=-71*degr2rad;
-  double ra=3*15*degr2rad;
-  double decl=24*degr2rad;
-  double gmst=jd2gmst(jd);
+  double jd=iso8601toJD("2016-11-01T08:53:01Z");
+  cout << "jd="<<dataToString(jd)<<endl;
+
+  double lat=(19+49/60.+32/3600.)*degr2rad; //Subaru
+  double lon=-(155+28/60.+34/3600.)*degr2rad; //Subaru
+  double ra=34.0*degr2rad;
+  double decl=-4.5*degr2rad;
+  double gmst=jd2gast(jd);
+  cout << ra*rad2degr << " " << decl*rad2degr << endl;
+  precess(ra, decl, 2000., 2000. + (jd-j2000) / 365.25);
+  cout <<  (jd-j2000) / 365.25 << endl;
+  cout << ra*rad2degr << " " << decl*rad2degr << endl;
   double ha=gmst2ha (gmst,lon,ra);
+  cout << "hour angle [hours]: " << ha*rad2degr/15-24 << " " << dataToString(ha*rad2degr/15) << endl;
   double alt=asin(sin(decl)*sin(lat)+cos(decl)*cos(lat)*cos(ha));
   double az=acos((sin(decl)-sin(alt)*sin(lat))/(cos(alt)*cos(lat)));
   if (sin(ha)>0) az=twopi-az;
@@ -910,6 +946,7 @@ void transformtest ()
 
 int main(int argc, const char ** argv)
   {
+  //  transformtest();
   map<string,string> paramdict;
   parse_cmdline_equalsign (argc, argv, paramdict);
   paramfile params (paramdict);
