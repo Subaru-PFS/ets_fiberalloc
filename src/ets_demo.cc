@@ -814,7 +814,7 @@ vec3 getCenter(const vector<Target> &tgt)
   return res;
   }
 
-#if 0
+#if 1
 double greg2julian (int y, int m, int d)
   {
   if (m<=2) // Jan, Feb
@@ -890,6 +890,96 @@ double iso8601toJD (const std::string &datetime)
          stringToData<double>(match[6])/(24.*60.*60.);
   return jd0;
   }
+template<size_t n> double poly (double x, const array<double, n> &c)
+  {
+  double res=0., v=1.;
+  for (size_t i=0; i<c.size(); ++i)
+    {
+    res+=c[i]*v;
+    v*=x;
+    }
+  return res;
+  }
+
+void nutate (double jd, double &ra, double &dec)
+  {
+  //  form time in Julian centuries from 1900.0 Hmmm? Looks tather like 2000.0
+  double t = (jd - 2451545.)/36525.;
+
+  // Mean elongation of the Moon
+  const array<double,4> coeff1 { 297.85036,  445267.111480, -0.0019142, 1./189474 };
+  double d=fmodulo(poly(t,coeff1)*degr2rad,twopi);
+
+  // Sun's mean anomaly
+  const array<double,4> coeff2 { 357.52772, 35999.050340, -0.0001603, -1./3e5 };
+  double m=fmodulo(poly(t,coeff2)*degr2rad,twopi);
+
+  // Moon's mean anomaly
+  const array<double,4> coeff3 { 134.96298, 477198.867398, 0.0086972, 1./5.625e4 };
+  double mprime = fmodulo(poly(t,coeff3)*degr2rad,twopi);
+
+  // Moon's argument of latitude
+  const array<double,4> coeff4 { 93.27191, 483202.017538, -0.0036825, -1./3.27270e5 };
+  double f = fmodulo(poly(t,coeff4)*degr2rad,twopi);
+
+  // Longitude of the ascending node of the Moon's mean orbit on the ecliptic,
+  // measured from the mean equinox of the date
+
+  const array<double,4> coeff5 { 125.04452, -1934.136261, 0.0020708, 1./4.5e5 };
+  double omega = fmodulo(poly(t,coeff5)*degr2rad,twopi);
+
+  const array<double,63> d_lng { 0,-2,0,0,0,0,-2,0,0,-2,-2,-2,0,2,0,2,0,0,-2,0,2,0,0,-2,0,-2,0,0,2,
+   -2,0,-2,0,0,2,2,0,-2,0,2,2,-2,-2,2,2,0,-2,-2,0,-2,-2,0,-1,-2,1,0,0,-1,0,0,
+     2,0,2};
+  const array<double,63> m_lng
+ {0,0,0,0,1,0,1,0,0,-1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,0,2,1,0,-1,0,0,0,1,1,-1,0,
+  0,0,0,0,0,-1,-1,0,0,0,1,0,0,1,0,0,0,-1,1,-1,-1,0,-1};
+  const array<double,63> mp_lng{0,0,0,0,0,1,0,0,1,0,1,0,-1,0,1,-1,-1,1,2,-2,0,2,2,1,0,0,-1,0,-1,
+   0,0,1,0,2,-1,1,0,1,0,0,1,2,1,-2,0,1,0,0,2,2,0,1,1,0,0,1,-2,1,1,1,-1,3,0 };
+  const array<double,63> f_lng {0,2,2,0,0,0,2,2,2,2,0,2,2,0,0,2,0,2,0,2,2,2,0,2,2,2,2,0,0,2,0,0,
+   0,-2,2,2,2,0,2,2,0,2,2,0,0,0,2,0,2,0,2,-2,0,0,0,2,2,0,0,2,2,2,2 };
+  const array<double,63> om_lng {1,2,2,2,0,0,2,1,2,2,0,1,2,0,1,2,1,1,0,1,2,2,0,2,0,0,1,0,1,2,1,
+   1,1,0,1,2,2,0,2,1,0,2,1,1,1,0,1,1,1,1,1,0,0,0,0,0,2,0,0,2,2,2,2 };
+  const array<double,63> sin_lng {-171996, -13187, -2274, 2062, 1426, 712, -517, -386, -301, 217,
+    -158, 129, 123, 63, 63, -59, -58, -51, 48, 46, -38, -31, 29, 29, 26, -22,
+     21, 17, 16, -16, -15, -13, -12, 11, -10, -8, 7, -7, -7, -7,
+     6,6,6,-6,-6,5,-5,-5,-5,4,4,4,-4,-4,-4,3,-3,-3,-3,-3,-3,-3,-3};
+  const array<double,63> sdelt {-174.2, -1.6, -0.2, 0.2, -3.4, 0.1, 1.2, -0.4, 0, -0.5, 0, 0.1,
+     0,0,0.1, 0,-0.1,0,0,0,0,0,0,0,0,0,0, -0.1, 0, 0.1, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 };
+  const array<double,63> cos_lng { 92025, 5736, 977, -895, 54, -7, 224, 200, 129, -95,0,-70,-53,0,
+    -33, 26, 32, 27, 0, -24, 16,13,0,-12,0,0,-10,0,-8,7,9,7,6,0,5,3,-3,0,3,3,
+     0,-3,-3,3,3,0,3,3,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0 };
+  const array<double,63> cdelt {8.9, -3.1, -0.5, 0.5, -0.1, 0.0, -0.6, 0.0, -0.1, 0.3,
+     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+
+  double d_psi=0., d_eps=0.;
+  // Sum the periodic terms
+  for (size_t n=0; n<d_lng.size(); ++n)
+    {
+    double arg=d_lng[n]*d + m_lng[n]*m +mp_lng[n]*mprime + f_lng[n]*f +om_lng[n]*omega;
+    double sarg = sin(arg);
+    double carg = cos(arg);
+    d_psi += 0.0001*(sdelt[n]*t + sin_lng[n])*sarg;
+    d_eps += 0.0001*(cdelt[n]*t + cos_lng[n])*carg;
+    }
+
+  double eps0 = 23.4392911*3600. - 46.8150*t - 0.00059*t*t + 0.001813*t*t*t;
+  double eps = (eps0 + d_eps)/3600.*degr2rad; // true obliquity of the ecliptic in radians
+
+  double ce = cos(eps);
+  double se = sin(eps);
+
+  // convert ra-dec to equatorial rectangular coordinates
+  vec3 p1(pointing(halfpi-dec,ra));
+const double d2as=pi/(180.*3600.);
+  // apply corrections to each rectangular coordinate
+  vec3 p2 (p1.x - (p1.y*ce + p1.z*se)*d_psi * d2as,
+           p1.y + (p1.x*ce*d_psi - p1.z*d_eps) * d2as,
+           p1.z + (p1.x*se*d_psi + p1.y*d_eps) * d2as);
+  pointing pp2(p2);
+  dec=halfpi-pp2.theta;
+  ra=pp2.phi;
+  }
 
 void precess (double &ra, double &dec, double equinox1, double equinox2)
   {
@@ -921,6 +1011,7 @@ void precess (double &ra, double &dec, double equinox1, double equinox2)
 
 void transformtest ()
   {
+  const double j2000= 2451545.0;
   double jd=iso8601toJD("2016-11-01T08:53:01Z");
   cout << "jd="<<dataToString(jd)<<endl;
 
@@ -929,8 +1020,13 @@ void transformtest ()
   double ra=34.0*degr2rad;
   double decl=-4.5*degr2rad;
   double gmst=jd2gast(jd);
+  cout << dataToString(ra) << " " << dataToString(decl) << endl;
   cout << ra*rad2degr << " " << decl*rad2degr << endl;
   precess(ra, decl, 2000., 2000. + (jd-j2000) / 365.25);
+  cout << dataToString(ra) << " " << dataToString(decl) << endl;
+  cout << ra*rad2degr << " " << decl*rad2degr << endl;
+ // nutate(jd,ra,decl);
+  cout << dataToString(ra) << " " << dataToString(decl) << endl;
   cout <<  (jd-j2000) / 365.25 << endl;
   cout << ra*rad2degr << " " << decl*rad2degr << endl;
   double ha=gmst2ha (gmst,lon,ra);
@@ -946,7 +1042,7 @@ void transformtest ()
 
 int main(int argc, const char ** argv)
   {
-  //  transformtest();
+    transformtest();
   map<string,string> paramdict;
   parse_cmdline_equalsign (argc, argv, paramdict);
   paramfile params (paramdict);
