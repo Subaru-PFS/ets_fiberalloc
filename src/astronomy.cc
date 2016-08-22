@@ -50,7 +50,8 @@ double jd2gmst (double jd)
   double d=jd-2451545.0;
   double d0=jd0-2451545.0;
   double t=d/36525.;
-  double res = 6.697374558 + 0.06570982441908*d0 + 1.00273790935*h + 0.000026*t*t;
+  double res = 6.697374558 + 0.06570982441908*d0 + 1.00273790935*h
+    + 0.000026*t*t;
   return fmodulo(res,24.);
   }
 #else
@@ -63,44 +64,6 @@ double jd2gmst (double jd)
   return fmodulo(res,24.);
   }
 #endif
-#if 0
-double jd2gast (double jd)
-  {
-  double gmst=jd2gmst(jd);
-  double d=jd-2451545.0;
-  double omega=125.04-0.052954*d;
-  double l = 280.47 + 0.98565*d;
-  double eps = 23.4393 - 0.0000004*d;
-  double dpsi=-0.000319*sin(omega*degr2rad) - 0.000024*sin(2*l*degr2rad);
-  double res=gmst+dpsi*cos(eps*degr2rad);
-  return fmodulo(res,24.);
-  }
-double jd2gast (double jd)
-  {
-  double gmst=jd2gmst(jd);
-  double t=(jd-2451545.0)/36525.;
-  double EPSILONm = 23.439291-0.0130111*t - 1.64E-07*t*t + 5.04E-07*t*t*t;
-  double L = 280.4665 + 36000.7698*t;
-  double dL = 218.3165 + 481267.8813*t;
-  double OMEGA = 125.04452 - 1934.136261*t;
-
-L*=degr2rad; dL*=degr2rad; OMEGA*=degr2rad;
-  double dPSI = -17.20*sin(OMEGA) - 1.32*sin(2.*L) - .23*sin(2.*dL)
-    + 21.*sin(2.*OMEGA);
-  double dEPSILON = 9.20*cos(OMEGA) + .57*cos(2.*L) + .10*cos(2.*dL) -
-    .09*cos(2.*OMEGA);
-
-  dPSI = dPSI*(1./3600)*degr2rad;
-  dEPSILON = dEPSILON*(1./3600)*degr2rad;
-cout <<"BLAH" << dPSI << " " << dEPSILON << endl;
-  return fmodulo(gmst + dPSI*cos(EPSILONm*degr2rad+dEPSILON)*rad2degr/15.,24.);
-  }
-#endif
-double jd2gmst_approx (double jd)
-  {
-  double res = 18.697374558 + 24.06570982441908*(jd-2451545.0);
-  return fmodulo(res,24.);
-  }
 
 double gmst2ha (double gmst, double lon, double ra) // time in h, angles in rad
   {
@@ -134,11 +97,10 @@ template<size_t n> double poly (double x, const array<double, n> &c)
 
 void nutate (double jd, double &d_psi, double &d_eps)
   {
-  //  form time in Julian centuries from 1900.0 Hmmm? Looks tather like 2000.0
   double t = (jd - 2451545.)/36525.;
 
   // Mean elongation of the Moon
-  const array<double,4> coeff1 { 297.85036,  445267.111480, -0.0019142, 1./189474 };
+  const array<double,4> coeff1 { 297.85036,445267.111480,-0.0019142,1./189474 };
   double d=fmodulo(poly(t,coeff1)*degr2rad,twopi);
 
   // Sun's mean anomaly
@@ -146,48 +108,53 @@ void nutate (double jd, double &d_psi, double &d_eps)
   double m=fmodulo(poly(t,coeff2)*degr2rad,twopi);
 
   // Moon's mean anomaly
-  const array<double,4> coeff3 { 134.96298, 477198.867398, 0.0086972, 1./5.625e4 };
+  const array<double,4> coeff3 { 134.96298,477198.867398,0.0086972,1./5.625e4 };
   double mprime = fmodulo(poly(t,coeff3)*degr2rad,twopi);
 
   // Moon's argument of latitude
-  const array<double,4> coeff4 { 93.27191, 483202.017538, -0.0036825, -1./3.27270e5 };
+  const array<double,4> coeff4 {93.27191,483202.017538,-0.0036825,-1./3.2727e5};
   double f = fmodulo(poly(t,coeff4)*degr2rad,twopi);
 
   // Longitude of the ascending node of the Moon's mean orbit on the ecliptic,
   // measured from the mean equinox of the date
-
   const array<double,4> coeff5 { 125.04452, -1934.136261, 0.0020708, 1./4.5e5 };
   double omega = fmodulo(poly(t,coeff5)*degr2rad,twopi);
 
-  const array<double,63> d_lng { 0,-2,0,0,0,0,-2,0,0,-2,-2,-2,0,2,0,2,0,0,-2,0,2,0,0,-2,0,-2,0,0,2,
-   -2,0,-2,0,0,2,2,0,-2,0,2,2,-2,-2,2,2,0,-2,-2,0,-2,-2,0,-1,-2,1,0,0,-1,0,0,
-     2,0,2};
-  const array<double,63> m_lng
- {0,0,0,0,1,0,1,0,0,-1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,0,2,1,0,-1,0,0,0,1,1,-1,0,
-  0,0,0,0,0,-1,-1,0,0,0,1,0,0,1,0,0,0,-1,1,-1,-1,0,-1};
-  const array<double,63> mp_lng{0,0,0,0,0,1,0,0,1,0,1,0,-1,0,1,-1,-1,1,2,-2,0,2,2,1,0,0,-1,0,-1,
-   0,0,1,0,2,-1,1,0,1,0,0,1,2,1,-2,0,1,0,0,2,2,0,1,1,0,0,1,-2,1,1,1,-1,3,0 };
-  const array<double,63> f_lng {0,2,2,0,0,0,2,2,2,2,0,2,2,0,0,2,0,2,0,2,2,2,0,2,2,2,2,0,0,2,0,0,
-   0,-2,2,2,2,0,2,2,0,2,2,0,0,0,2,0,2,0,2,-2,0,0,0,2,2,0,0,2,2,2,2 };
-  const array<double,63> om_lng {1,2,2,2,0,0,2,1,2,2,0,1,2,0,1,2,1,1,0,1,2,2,0,2,0,0,1,0,1,2,1,
-   1,1,0,1,2,2,0,2,1,0,2,1,1,1,0,1,1,1,1,1,0,0,0,0,0,2,0,0,2,2,2,2 };
-  const array<double,63> sin_lng {-171996, -13187, -2274, 2062, 1426, 712, -517, -386, -301, 217,
-    -158, 129, 123, 63, 63, -59, -58, -51, 48, 46, -38, -31, 29, 29, 26, -22,
-     21, 17, 16, -16, -15, -13, -12, 11, -10, -8, 7, -7, -7, -7,
+  const array<double,63> d_lng { 0,-2,0,0,0,0,-2,0,0,-2,-2,-2,0,2,0,2,0,0,-2,0,
+    2,0,0,-2,0,-2,0,0,2,-2,0,-2,0,0,2,2,0,-2,0,2,2,-2,-2,2,2,0,-2,-2,0,-2,-2,0,
+    -1,-2,1,0,0,-1,0,0, 2,0,2};
+  const array<double,63> m_lng { 0,0,0,0,1,0,1,0,0,-1,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,2,0,2,1,0,-1,0,0,0,1,1,-1,0,0,0,0,0,0,-1,-1,0,0,0,1,0,0,1,0,0,0,-1,
+    1,-1,-1,0,-1};
+  const array<double,63> mp_lng {0,0,0,0,0,1,0,0,1,0,1,0,-1,0,1,-1,-1,1,2,-2,0,
+    2,2,1,0,0,-1,0,-1,0,0,1,0,2,-1,1,0,1,0,0,1,2,1,-2,0,1,0,0,2,2,0,1,1,0,0,1,
+    -2,1,1,1,-1,3,0 };
+  const array<double,63> f_lng {0,2,2,0,0,0,2,2,2,2,0,2,2,0,0,2,0,2,0,2,2,2,0,2,
+    2,2,2,0,0,2,0,0,0,-2,2,2,2,0,2,2,0,2,2,0,0,0,2,0,2,0,2,-2,0,0,0,2,2,0,0,2,2,
+    2,2 };
+  const array<double,63> om_lng {1,2,2,2,0,0,2,1,2,2,0,1,2,0,1,2,1,1,0,1,2,2,0,
+    2,0,0,1,0,1,2,1,1,1,0,1,2,2,0,2,1,0,2,1,1,1,0,1,1,1,1,1,0,0,0,0,0,2,0,0,2,2,
+    2,2 };
+  const array<double,63> sin_lng {-171996, -13187, -2274, 2062, 1426, 712, -517,
+    -386, -301, 217, -158, 129, 123, 63, 63, -59, -58, -51, 48, 46, -38, -31,
+    29, 29, 26, -22, 21, 17, 16, -16, -15, -13, -12, 11, -10, -8, 7, -7, -7, -7,
      6,6,6,-6,-6,5,-5,-5,-5,4,4,4,-4,-4,-4,3,-3,-3,-3,-3,-3,-3,-3};
-  const array<double,63> sdelt {-174.2, -1.6, -0.2, 0.2, -3.4, 0.1, 1.2, -0.4, 0, -0.5, 0, 0.1,
-     0,0,0.1, 0,-0.1,0,0,0,0,0,0,0,0,0,0, -0.1, 0, 0.1, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 };
-  const array<double,63> cos_lng { 92025, 5736, 977, -895, 54, -7, 224, 200, 129, -95,0,-70,-53,0,
-    -33, 26, 32, 27, 0, -24, 16,13,0,-12,0,0,-10,0,-8,7,9,7,6,0,5,3,-3,0,3,3,
-     0,-3,-3,3,3,0,3,3,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0 };
-  const array<double,63> cdelt {8.9, -3.1, -0.5, 0.5, -0.1, 0.0, -0.6, 0.0, -0.1, 0.3,
-     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+  const array<double,63> sdelt {-174.2, -1.6, -0.2, 0.2, -3.4, 0.1, 1.2, -0.4,
+    0, -0.5, 0, 0.1, 0,0,0.1, 0,-0.1,0,0,0,0,0,0,0,0,0,0, -0.1, 0, 0.1,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 };
+  const array<double,63> cos_lng { 92025, 5736, 977, -895, 54, -7, 224, 200,
+    129, -95,0,-70,-53,0, -33, 26, 32, 27, 0, -24, 16,13,0,-12,0,0,-10,0,-8,7,9,
+    7,6,0,5,3,-3,0,3,3,0,-3,-3,3,3,0,3,3,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0 };
+  const array<double,63> cdelt {8.9, -3.1, -0.5, 0.5, -0.1, 0.0, -0.6, 0.0,
+    -0.1, 0.3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 
   d_psi=d_eps=0.;
   // Sum the periodic terms
   for (size_t n=0; n<d_lng.size(); ++n)
     {
-    double arg=d_lng[n]*d + m_lng[n]*m +mp_lng[n]*mprime + f_lng[n]*f +om_lng[n]*omega;
+    double arg=d_lng[n]*d + m_lng[n]*m + mp_lng[n]*mprime
+               + f_lng[n]*f +om_lng[n]*omega;
     double sarg = sin(arg);
     double carg = cos(arg);
     d_psi += 0.0001*(sdelt[n]*t + sin_lng[n])*sarg;
@@ -199,21 +166,20 @@ void co_nutate (double jd, double &ra, double &dec)
   {
   double d_psi, d_eps;
   nutate (jd,d_psi,d_eps);
-  //  form time in Julian centuries from 1900.0 Hmmm? Looks tather like 2000.0
   double t = (jd - 2451545.)/36525.;
   double eps0 = 23.4392911*3600. - 46.8150*t - 0.00059*t*t + 0.001813*t*t*t;
-  double eps = (eps0 + d_eps)/3600.*degr2rad; // true obliquity of the ecliptic in radians
-
+  // true obliquity of the ecliptic in radians
+  double eps = (eps0 + d_eps)/3600.*degr2rad;
   double ce = cos(eps);
   double se = sin(eps);
 
   // convert ra-dec to equatorial rectangular coordinates
   vec3 p1(pointing(halfpi-dec,ra));
-const double d2as=pi/(180.*3600.);
+  const double as2rad=pi/(180.*3600.);
   // apply corrections to each rectangular coordinate
-  vec3 p2 (p1.x - (p1.y*ce + p1.z*se)*d_psi * d2as,
-           p1.y + (p1.x*ce*d_psi - p1.z*d_eps) * d2as,
-           p1.z + (p1.x*se*d_psi + p1.y*d_eps) * d2as);
+  vec3 p2 (p1.x - (p1.y*ce + p1.z*se)*d_psi * as2rad,
+           p1.y + (p1.x*ce*d_psi - p1.z*d_eps) * as2rad,
+           p1.z + (p1.x*se*d_psi + p1.y*d_eps) * as2rad);
   pointing pp2(p2);
   dec=halfpi-pp2.theta;
   ra=pp2.phi;
@@ -225,7 +191,8 @@ double jd2gast (double jd)
   //  form time in Julian centuries from 1900.0 Hmmm? Looks tather like 2000.0
   double t = (jd - 2451545.)/36525.;
   double eps0 = 23.4392911*3600. - 46.8150*t - 0.00059*t*t + 0.001813*t*t*t;
-  double eps = (eps0 + d_eps)/3600.*degr2rad; // true obliquity of the ecliptic in radians
+  // true obliquity of the ecliptic in radians
+  double eps = (eps0 + d_eps)/3600.*degr2rad;
   double res=jd2gmst(jd) + d_psi/3600./15. *cos(eps);
   return fmodulo(res,24.);
   }
@@ -261,8 +228,8 @@ void precess (double &ra, double &dec, double equinox1, double equinox2)
 double co_refract_forward (double a, double p, double t)
   {
   a*=rad2degr;
-  // you have observed the altitude a, and would like to know what the "apparent"
-  // altitude is (the one behind the atmosphere).
+  // you have observed the altitude a, and would like to know what the
+  // "apparent" altitude is (the one behind the atmosphere).
   bool w = a<15.;
   double r = 0.0166667/tan((a + 7.31/(a+4.4))*degr2rad);
 
@@ -281,9 +248,9 @@ double co_refract (double alt_in, double alt_observatory)
   if (alt_observatory<=11000)
     temperature = 283.0 - alpha*alt_observatory;
 
-  // estimate Pressure based on altitude, using U.S. Standard Atmosphere formula.
+  // estimate Pressure based on altitude, using U.S. Standard Atmosphere formula
   double pressure = 1010.*pow(1-6.5/288000*alt_observatory,5.255);
-  double epsilon = 0.25; // accuracy of iteration for observed=1 case, in arcseconds
+  double epsilon = 0.25; // accuracy of iteration for observed=1 case, in arcsec
 
   // calculate initial refraction guess
   double dr = co_refract_forward(alt_in,pressure,temperature);
@@ -311,7 +278,7 @@ void sunpos (double jd, double &ra, double &dec, double &longmed)
   // using the Earth's mean anomaly ME
 
   double me = 358.475844 + (fmodulo(35999.049750*t,360.0));
-  double ellcor  = (6910.1 - 17.2*t)*sin(me*degr2rad) + 72.3*sin(2.0*me*degr2rad);
+  double ellcor =(6910.1 - 17.2*t)*sin(me*degr2rad) + 72.3*sin(2.0*me*degr2rad);
   l+=ellcor;
 
   // allow for the Venus perturbations using the mean anomaly of Venus MV
@@ -377,7 +344,8 @@ void co_aberration (double &ra, double &dec, double jd)
   nutate (jd, d_psi, d_epsilon); // d_psi and d_epsilon in degrees?!
   double eps0 = (23+26/60.+21.448/3600.)*3600. - 46.8150*T - 0.00059*T*T +
                0.001813*T*T*T;
-  double eps = (eps0 + d_epsilon)/3600.*degr2rad; // true obliquity of the ecliptic in radians
+  // true obliquity of the ecliptic in radians
+  double eps = (eps0 + d_epsilon)/3600.*degr2rad;
 
   double sunra, sundec, sunlon;
   sunpos (jd, sunra, sundec, sunlon);
@@ -414,23 +382,16 @@ void eq2hor_subaru (double ra, double decl, const string &time,
   {
   const double j2000= 2451545.0;
   double jd=iso8601toJD(time);
-  cout << "jd="<< dataToString(jd) << endl;
 
   double lat=(19+49/60.+32/3600.)*degr2rad; //Subaru
   double lon=-(155+28/60.+34/3600.)*degr2rad; //Subaru
   double gast=jd2gast(jd);
-  cout << dataToString(ra*rad2degr) << " " << dataToString(decl*rad2degr) << endl;
   precess(ra, decl, 2000., 2000. + (jd-j2000) / 365.25);
-  cout << dataToString(ra*rad2degr) << " " << dataToString(decl*rad2degr) << endl;
   co_nutate(jd,ra,decl);
-  cout << dataToString(ra*rad2degr) << " " << dataToString(decl*rad2degr) << endl;
   co_aberration(ra,decl,jd);
-  cout << dataToString(ra*rad2degr) << " " << dataToString(decl*rad2degr) << endl;
   double ha=gmst2ha (gast,lon,ra);
-  cout << "HA: " << dataToString(ha*rad2degr)<<endl;
   alt=asin(sin(decl)*sin(lat)+cos(decl)*cos(lat)*cos(ha));
   az=acos((sin(decl)-sin(alt)*sin(lat))/(cos(alt)*cos(lat)));
   if (sin(ha)>0) az=twopi-az;
   alt = co_refract(alt,4139.);
-  cout << dataToString(rad2degr*alt) << " " << dataToString(rad2degr*az) << endl;
   }

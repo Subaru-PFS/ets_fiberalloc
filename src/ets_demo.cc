@@ -825,7 +825,7 @@ void transformtest ()
 
 int main(int argc, const char ** argv)
   {
-    transformtest();
+//    transformtest();
   map<string,string> paramdict;
   parse_cmdline_equalsign (argc, argv, paramdict);
   paramfile params (paramdict);
