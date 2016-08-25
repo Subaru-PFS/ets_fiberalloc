@@ -95,7 +95,7 @@ template<size_t n> double poly (double x, const array<double, n> &c)
   return res;
   }
 
-void nutate (double jd, double &d_psi, double &d_eps)
+void nutate (double jd, double &d_psi, double &d_eps) // result in arcsec
   {
   double t = (jd - 2451545.)/36525.;
 
@@ -276,7 +276,6 @@ void sunpos (double jd, double &ra, double &dec, double &longmed)
 
   // allow for ellipticity of the orbit (equation of centre)
   // using the Earth's mean anomaly ME
-
   double me = 358.475844 + (fmodulo(35999.049750*t,360.0));
   double ellcor =(6910.1 - 17.2*t)*sin(me*degr2rad) + 72.3*sin(2.0*me*degr2rad);
   l+=ellcor;
@@ -341,7 +340,7 @@ void co_aberration (double &ra, double &dec, double jd)
   const double d2r=degr2rad;
   double T = (jd -2451545.0)/36525.0; // julian centuries from J2000 of jd.
   double d_psi, d_epsilon;
-  nutate (jd, d_psi, d_epsilon); // d_psi and d_epsilon in degrees?!
+  nutate (jd, d_psi, d_epsilon); // d_psi and d_epsilon in arcsec
   double eps0 = (23+26/60.+21.448/3600.)*3600. - 46.8150*T - 0.00059*T*T +
                0.001813*T*T*T;
   // true obliquity of the ecliptic in radians
@@ -374,12 +373,81 @@ void co_aberration (double &ra, double &dec, double jd)
   dec+=d_dec*degr2rad/3600;
   }
 
+class eq2hor
+  {
+  private:
+    const double j2000= 2451545.0;
+    const double sec2rad=degr2rad/3600.;
+
+    rotmatrix npmat;
+    double lat, lon, gast;
+
+    static rotmatrix axis_rotation_matrix(const vec3 &axis, double angle)
+      {
+      rotmatrix res;
+      res.Make_Axis_Rotation_Transform (axis, angle);
+      return res;
+      }
+
+    static rotmatrix get_precession_matrix (double equinox1, double equinox2)
+      {
+      const double sec2rad=degr2rad/3600.;
+      double t = 1e-3*(equinox2-equinox1);
+      double st = 1e-3*(equinox1-2000.);
+      double A=sec2rad*t*(23062.181 + st*(139.656 +0.0139*st)
+        + t*(30.188 - 0.344*st+17.998*t));
+      double B=sec2rad*t*t*(79.280 + 0.410*st + 0.205*t) + A;
+      double C=sec2rad*t*(20043.109 - st*(85.33 + 0.217*st)
+        + t*(-42.665 - 0.217*st -41.833*t));
+
+      double sina = sin(A), sinb = sin(B), sinc = sin(C),
+             cosa = cos(A), cosb = cos(B), cosc = cos(C);
+
+      return rotmatrix(
+        vec3( cosa*cosb*cosc-sina*sinb,sina*cosb+cosa*sinb*cosc, cosa*sinc),
+        vec3(-cosa*sinb-sina*cosb*cosc,cosa*cosb-sina*sinb*cosc,-sina*sinc),
+        vec3(-cosb*sinc, -sinb*sinc, cosc));
+      }
+
+  public:
+    eq2hor (double lat_obs, double lon_obs, double alt_obs, const string &time)
+      {
+        lat=lat_obs; lon=lon_obs;
+      double jd=iso8601toJD(time);
+      double d_psi, d_eps;
+      nutate(jd, d_psi, d_eps);
+      double t = (jd - 2451545.)/36525.;
+      double eps0 = 23.4392911*3600. - 46.8150*t - 0.00059*t*t + 0.001813*t*t*t;
+      // true obliquity of the ecliptic in radians
+      double eps = (eps0 + d_eps)/3600.*degr2rad;
+      gast=fmodulo(jd2gmst(jd) + d_psi/3600./15. *cos(eps),24.);
+      rotmatrix prec_mat=get_precession_matrix(2000., 2000. + (jd-j2000)/365.25);
+      rotmatrix nut_mat =   axis_rotation_matrix(vec3(1,0,0),-eps)
+                           *axis_rotation_matrix(vec3(0,0,1),-d_psi*sec2rad)
+                           *axis_rotation_matrix(vec3(1,0,0),eps0*sec2rad);
+      npmat=nut_mat*prec_mat;
+      }
+    void radec2altaz (double ra, double dec, double &alt, double &az) const
+      {
+      pointing ptg(halfpi-dec,ra);
+      ptg=pointing(npmat.Transform(vec3(ptg)));
+      ra=ptg.phi;
+      ra+=(ra<0.)*twopi;
+      dec=halfpi-ptg.theta;
+      double ha=gmst2ha (gast,lon,ra);
+      alt=asin(sin(dec)*sin(lat)+cos(dec)*cos(lat)*cos(ha));
+      az=acos((sin(dec)-sin(alt)*sin(lat))/(cos(alt)*cos(lat)));
+      if (sin(ha)>0) az=twopi-az;
+      }
+  };
+
 
 } // unnamed namespace
 
 void eq2hor_subaru (double ra, double decl, const string &time,
   double &alt, double &az)
   {
+    double raorig=ra, decorig=decl;
   const double j2000= 2451545.0;
   double jd=iso8601toJD(time);
 
@@ -388,10 +456,14 @@ void eq2hor_subaru (double ra, double decl, const string &time,
   double gast=jd2gast(jd);
   precess(ra, decl, 2000., 2000. + (jd-j2000) / 365.25);
   co_nutate(jd,ra,decl);
-  co_aberration(ra,decl,jd);
+//  co_aberration(ra,decl,jd);
   double ha=gmst2ha (gast,lon,ra);
   alt=asin(sin(decl)*sin(lat)+cos(decl)*cos(lat)*cos(ha));
   az=acos((sin(decl)-sin(alt)*sin(lat))/(cos(alt)*cos(lat)));
   if (sin(ha)>0) az=twopi-az;
-  alt = co_refract(alt,4139.);
+//  alt = co_refract(alt,4139.);
+  cout << dataToString(alt*rad2degr) << " " << dataToString(az*rad2degr) << endl;
+  eq2hor eqtest((19+49/60.+32/3600.)*degr2rad, -(155+28/60.+34/3600.)*degr2rad, 4139.,time);
+  eqtest.radec2altaz(raorig, decorig,alt,az);
+  cout << dataToString(alt*rad2degr) << " " << dataToString(az*rad2degr) << endl;
   }
