@@ -2,6 +2,7 @@
 #include <string>
 #include <memory>
 #include <regex>
+#include <array>
 #include "lsconstants.h"
 #include "math_utils.h"
 #include "string_utils.h"
