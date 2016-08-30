@@ -102,6 +102,14 @@ Target priorities are taken into account by the assignment algorithms.
     - from the list of visible targets with the highest priority, assign the target
       with the highest importance to a fiber. If multiple fibers can see the target,
       choose the fiber with the lowest number of potential targets.
+    - the importance function is designed to measure the 'crowdedness' at the
+      location of a given source. For target i, it is given as
+      I_i = \sum_j t_i t_j K(r_ij)
+      where t_i and t_j are the remaining observation times for targets i and j, and
+      r_ij is the distance between the targets. The kernel function K should be 1 for
+      r_ij=0 and drop off to zero for radii around the fiber patrol radius.
+      This function ensures that each fiber is assigned to more 'crowded' areas of the
+      target field first, with the goal of homogenizing the distribution of targets.
 
 In case of any questions, please don't hesitate to contact me
 (martin@mpa-garching.mpg.de)!
