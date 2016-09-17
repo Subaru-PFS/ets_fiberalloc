@@ -15,7 +15,7 @@ with version 5.3 and above, but any 5.x will probably work).
 ## Running the demo:
 
 Try, for example:
-`./ets_demo assigner=naive input=<path/to>/Halo.dat fract=0.95 output=output.txt`
+`./ets_demo assigner=naive input=<path/to>/Halo.dat fract=0.95 output=output.txt time=2016-04-03T08:00:00Z`
 
 Supported values for "assigner" are "naive", "draining" and "new".
 
@@ -31,6 +31,13 @@ stops. It is computed like this:
                 so far
 
   fract := obs_time/total_time
+
+- "time" is a ISO 8601 string containing the date and time of the observation.
+  This is needed to calculate the telescope elevation, the exact azimuth and altitude
+  of the targets as seen from Subaru, and the distortion of target positions in the
+  instrument's focal plane.
+  NOTE: Currenty, only strings in the exact format "yyyy-mm-ddThh:mm:ssZ" are
+  accepted. If necessary, the parser can be made more flexible.
 
 - "output" is an optional parameter. If present, it is the name of a file into
 which detailed fiber assignment data is written.
