@@ -103,6 +103,41 @@ Target priorities are taken into account by the assignment algorithms.
       with the highest importance to a fiber. If multiple fibers can see the target,
       choose the fiber with the lowest number of potential targets.
 
+### Comments on the choice of algorithm:
+
+It is a justified question why ETS does not simply make use of an assigning
+algorithm based on the maximum-flow graph approach (Goldberg 1997, J. Algorithms
+22, 1), similar to SDSS (Blanton et al. 2003, AJ 125, 2276). This algorithm is
+proven to be optimal and runs in polynomial time.
+
+Unfortunately the characteristics of both the instrument and the surveys differ
+very much between SDSS and PFS. In SDSS
+- all fibers could be placed almost anywhere on the whole focal plane, as long
+  as they were not too close to other fibers
+- the target distribution contained only very few target groups that could lead
+  to fiber collisions.
+
+For PFS
+- every fiber is only movable within a circular patrol area much smaller than
+  the focal plane
+- the test target catalogs are (for a large part) so spatially dense that almost
+  all targets are in a group with many potentially colliding neighbors.
+
+The reduced patrol area of individual fibers implies that the optimum
+observation strategy depends much more on telescope pointing and orientation
+than it does for SDSS. However, selecting optimal pointing and orientation is
+not covered by the network flow algorithm and is a NP-hard problem.
+
+SDSS had to adopt a special (not provably optimal) approach for potentially
+colliding targets; for its target distribution this was not a big problem. In
+the case of the planned PFS surveys, the fact that practically all targets are
+potentially colliding defeats the purpose of the network-flow approach.
+
+It appears that other groups developing assignment algorithms for instruments
+similar to PFS have come to the same conclusion (see, e.g., Morales et al. 2012,
+MNRAS 419, 1187).
+
+
 In case of any questions, please don't hesitate to contact me
 (martin@mpa-garching.mpg.de)!
 
