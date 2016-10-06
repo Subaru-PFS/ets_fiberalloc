@@ -15,7 +15,7 @@ with version 5.3 and above, but any 5.x will probably work).
 ## Running the demo:
 
 Try, for example:
-`./ets_demo assigner=naive input=<path/to>/Halo.dat fract=0.95 output=output.txt`
+`./ets_demo assigner=naive input=<path/to>/Halo.dat fract=0.95 output=output.txt time=2016-04-03T08:00:00Z`
 
 Supported values for "assigner" are "naive", "draining" and "new".
 
@@ -31,6 +31,13 @@ stops. It is computed like this:
                 so far
 
   fract := obs_time/total_time
+
+- "time" is a ISO 8601 string containing the date and time of the observation.
+  This is needed to calculate the telescope elevation, the exact azimuth and altitude
+  of the targets as seen from Subaru, and the distortion of target positions in the
+  instrument's focal plane.
+  NOTE: Currenty, only strings in the exact format "yyyy-mm-ddThh:mm:ssZ" are
+  accepted. If necessary, the parser can be made more flexible.
 
 - "output" is an optional parameter. If present, it is the name of a file into
 which detailed fiber assignment data is written.
@@ -102,6 +109,14 @@ Target priorities are taken into account by the assignment algorithms.
     - from the list of visible targets with the highest priority, assign the target
       with the highest importance to a fiber. If multiple fibers can see the target,
       choose the fiber with the lowest number of potential targets.
+    - the importance function is designed to measure the 'crowdedness' at the
+      location of a given source. For target i, it is given as
+      I_i = \sum_j t_i t_j K(r_ij)
+      where t_i and t_j are the remaining observation times for targets i and j, and
+      r_ij is the distance between the targets. The kernel function K should be 1 for
+      r_ij=0 and drop off to zero for radii around the fiber patrol radius.
+      This function ensures that each fiber is assigned to more 'crowded' areas of the
+      target field first, with the goal of homogenizing the distribution of targets.
 
 ### Comments on the choice of algorithm:
 

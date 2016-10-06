@@ -61,12 +61,13 @@ class Target
   {
   public:
     vec2 pos;
+    pointing radec, altaz;
     double time;
     int pri;
     int id;
 
-    Target (double x, double y, double time_, int id_, int pri_)
-      : pos(x,y), time(time_), pri(pri_), id(id_) {}
+    Target (const pointing &radec_, double time_, int id_, int pri_)
+      : radec(radec_), time(time_), pri(pri_), id(id_) {}
   };
 
 namespace {
@@ -275,11 +276,10 @@ void rotate (vec2 &pos, double sa, double ca)
   pos.y = sa*t.x + ca*t.y;
   }
 
-/*! Converts target coordinates from RA/DEC in degrees to PFI coordinates in
+/*! Converts target coordinates from alt/az to PFI coordinates in
     millimeters, given a telescope pointing and orientation.
     \note This is still very preliminary, incomplete and approximate! */
-void targetToPFI(vector<Target> &tgt, const pointing &los, double psi,
-  double /*elevation*/)
+void targetToPFI(vector<Target> &tgt, const pointing &los, double psi)
   {
   vec3 z{los}, sky{0,0,1};
   vec3 x=(sky-z*dotprod(z,sky)).Norm();
@@ -288,7 +288,7 @@ void targetToPFI(vector<Target> &tgt, const pointing &los, double psi,
   const double a0=0., a1=-3.2e2, a2=-1.37e1, a3=-7.45e0;
   for (auto&& t:tgt)
     {
-    vec3 pos=radec2ptg(t.pos.x,t.pos.y);
+    vec3 pos=t.altaz;
     vec3 xp=pos-y*dotprod(pos,y);
     vec3 yp=pos-x*dotprod(pos,x);
     vec2 pnew (atan2(dotprod(xp,x),dotprod(xp,z))*rad2degr,
@@ -602,12 +602,12 @@ vector<size_t> select_observable (const vector<Target> &tgt, double safety)
   }
 
 void single_exposure(const vector<Target> &tgt, const pointing &center,
-  double posang, double elevation, const FiberAssigner &ass,
+  double posang, const FiberAssigner &ass,
   vector<size_t> &tid, vector<size_t> &fid)
   {
   tid.clear(); fid.clear();
   vector<Target> tgt1(tgt);
-  targetToPFI(tgt1, center, posang, elevation);
+  targetToPFI(tgt1, center, posang);
 #if 1
   vector<size_t> idx = select_observable (tgt1, r_kernel);
   vector<Target> tgt2;
@@ -624,7 +624,7 @@ void single_exposure(const vector<Target> &tgt, const pointing &center,
 } // unnamed namespace
 
 void optimal_exposure(const vector<Target> &tgt, pointing &center, double dptg,
-  int nptg, double &posang, double dposang, int nposang, double elevation,
+  int nptg, double &posang, double dposang, int nposang,
   const FiberAssigner &ass, vector<size_t> &tid, vector<size_t> &fid)
   {
   double posang0=posang;
@@ -647,7 +647,7 @@ void optimal_exposure(const vector<Target> &tgt, pointing &center, double dptg,
         pointing newcenter(vcenter+(vdx*dx+vdy*dy));
         double newposang=posang0+da;
         vector<size_t> tid2,fid2;
-        single_exposure (tgt, newcenter, newposang, elevation, ass, tid2, fid2);
+        single_exposure (tgt, newcenter, newposang, ass, tid2, fid2);
         if (tid2.size()>tid.size())
           { tid=tid2; fid=fid2; center=newcenter; posang=newposang; }
         }
@@ -688,7 +688,7 @@ template<typename T> string toString(const T&val, int w, int p)
 
 void subprocess (const vector<Target> &tgt, const pointing &center0,
   double dptg, int nptg, double posang0, double dposang, int nposang,
-  double elevation, double fract, ofstream &fout, const FiberAssigner &ass)
+  double fract, ofstream &fout, const FiberAssigner &ass)
   {
   vector<Target> tgt1=tgt;
   double ttime=0., acc=0., time2=0.;
@@ -705,7 +705,7 @@ void subprocess (const vector<Target> &tgt, const pointing &center0,
     double posang(posang0);
     vector<size_t> tidmax, fidmax;
     optimal_exposure(tgt1, center, dptg, nptg, posang, dposang, nposang,
-      elevation, ass, tidmax, fidmax);
+      ass, tidmax, fidmax);
     if (tidmax.empty()) break; // stop if no more fibers could be assigned
     double time=tgt1[tidmax[0]].time;
     for (const auto i: tidmax)
@@ -715,7 +715,7 @@ void subprocess (const vector<Target> &tgt, const pointing &center0,
     if (fout.is_open())
       {
       fout << "Exposure " << cnt << ": duration " << time << "s, "
-        "RA: " << rad2degr*center.phi << ", DEC " << 90-rad2degr*center.theta
+        "AZ: " << rad2degr*center.phi << ", ALT " << 90-rad2degr*center.theta
         << " PA: " << rad2degr*posang << endl
         << "  Target     Fiber        RA       DEC" << endl;
       //FIXME: add PFI coordinates
@@ -729,9 +729,6 @@ void subprocess (const vector<Target> &tgt, const pointing &center0,
          << toString(tidmax.size()/double(nfiber),18,5)
          << toString(acc/ttime,28,5)
          << toString(time2,20,0) << endl;
-    cout << toString(rad2degr*center.phi,12,8) << " "
-         << toString(90-rad2degr*center.theta,12,8) << " "
-         << toString(posang*rad2degr,12,8) << endl;
     if (acc/ttime>fract) break;
     strip (tgt1,tidmax,time);
     }
@@ -739,7 +736,7 @@ void subprocess (const vector<Target> &tgt, const pointing &center0,
 
 /*! Reads targets from the ASCII file \a name and returns them in a \a vector.
     The returned coordinates are RA/DEC in degrees. */
-vector<Target> readTargets (const string &name)
+vector<Target> readTargets (const string &name, const string &time)
   {
   int lineno=0;
   vector<Target> res;
@@ -766,26 +763,32 @@ vector<Target> readTargets (const string &name)
         planck_assert((id0.length()>2) && (id0.substr(0,2)=="ID"),
           "identifier not starting with 'ID'");
         int id=stringToData<int>(id0.substr(2));
-        res.emplace_back(x,y,time,id,pri);
+        res.emplace_back(radec2ptg(x,y),time,id,pri);
         }
       else
         cerr << "Warning: unrecognized format in '" << name << "', line "
              << lineno << ":\n" << line << endl;
       }
     }
+  eq2hor eqtest((19+49/60.+32/3600.)*degr2rad, -(155+28/60.+34/3600.)*degr2rad, 4139.,time);
+  for (auto &t:res)
+    t.altaz=eqtest.radec2altaz(t.radec);
+
   return res;
   }
 
 void process(const string &name, double fract,
   const pointing &center, double dptg, int nptg, double posang, double dposang,
-  int nposang, const string &out,
+  int nposang, const string &out, const string &time,
   const FiberAssigner &ass)
   {
-  double elevation=0; /*ignored for the moment */
-  vector<Target> tgt=readTargets(name);
+  vector<Target> tgt=readTargets(name,time);
+  eq2hor eqtest((19+49/60.+32/3600.)*degr2rad, -(155+28/60.+34/3600.)*degr2rad, 4139.,time);
+  pointing center_altaz(eqtest.radec2altaz(center));
+cout << "center altaz: "<<center_altaz << endl;
   {
   vector<Target> tmp(tgt), tgt2;
-  targetToPFI(tmp, center, posang, elevation);
+  targetToPFI(tmp, center_altaz, posang);
   for (size_t i=0; i<tmp.size(); ++i)
     if (tmp[i].pos.dsq(vec2(0,0))<190*190)
       tgt2.push_back(tgt[i]);
@@ -794,7 +797,7 @@ void process(const string &name, double fract,
   ofstream fout;
   if (out!="")
     { fout.open(out); planck_assert(fout,"error opening output file"); }
-  subprocess (tgt, center, dptg, nptg, posang, dposang, nposang, elevation,
+  subprocess (tgt, center_altaz, dptg, nptg, posang, dposang, nposang,
     fract, fout, ass);
   }
 
@@ -805,7 +808,7 @@ vec3 getCenter(const vector<Target> &tgt)
   {
   vector<vec3> tmp;
   for (auto t:tgt)
-    tmp.push_back(vec3(radec2ptg(t.pos.x,t.pos.y)));
+    tmp.push_back(vec3(t.radec));
   double dummy;
   vec3 res;
   find_enclosing_circle(tmp,res,dummy);
@@ -815,17 +818,10 @@ vec3 getCenter(const vector<Target> &tgt)
   return res;
   }
 
-void transformtest ()
-  {
-  double alt, az;
-  eq2hor_subaru(34.0*degr2rad,-4.5*degr2rad,"2016-11-01T14:59:01Z", alt, az);
-  }
-
 } // unnamed namespace
 
 int main(int argc, const char ** argv)
   {
-//    transformtest();
   map<string,string> paramdict;
   parse_cmdline_equalsign (argc, argv, paramdict);
   paramfile params (paramdict);
@@ -844,7 +840,9 @@ int main(int argc, const char ** argv)
   if (params.param_present("ra")||params.param_present("dec"))
     center=radec2ptg (params.find<double>("ra"), params.find<double>("dec"));
   else
-    center=pointing(getCenter(readTargets(params.find<string>("input"))));
+    center=pointing(getCenter(readTargets(params.find<string>("input"),params.find<string>("time"))));
+
+cout << "center radec: "<<center << endl;
 
   double posang=degr2rad*params.find<double>("posang",0.);
   double dposang=degr2rad*params.find<double>("dposang",4.);
@@ -853,5 +851,5 @@ int main(int argc, const char ** argv)
   int nptg=params.find<int>("nptg",5);
   process (params.find<string>("input"),
     params.find<double>("fract"),center,dptg,nptg,posang,dposang,nposang,
-    params.find<string>("output",""),*pass);
+    params.find<string>("output",""),params.find<string>("time"),*pass);
   }
