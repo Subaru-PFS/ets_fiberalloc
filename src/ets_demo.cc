@@ -322,8 +322,9 @@ vec2 id2fiberpos(int id)
     Fiber ID is zero-based throughout this code, i.e. ranging from 0 to 2393. */
 vec2 id2dotpos(int id) // id is assumed to be in [0; 2394[
   {
+  const double dot_shift_y = 2.35;
   vec2 res=id2fiberpos(id);
-  res.y+=1.19;
+  res.y+=dot_shift_y;
   return res;
   }
 
