@@ -713,17 +713,21 @@ void subprocess (const vector<Target> &tgt, const pointing &center0,
       if (tgt1[i].time<time) time=tgt1[i].time;
     time2+=time;
     acc+=tidmax.size()*time;
+    targetToPFI(tgt1,center,posang);
     if (fout.is_open())
       {
       fout << "Exposure " << cnt << ": duration " << time << "s, "
         "AZ: " << rad2degr*center.phi << ", ALT " << 90-rad2degr*center.theta
         << " PA: " << rad2degr*posang << endl
-        << "  Target     Fiber        RA       DEC" << endl;
+        << "  Target     Fiber          X          Y         "
+           "RA        DEC" << endl;
       //FIXME: add PFI coordinates
       for (size_t i=0; i<tidmax.size(); ++i)
         fout << toString(tgt1[tidmax[i]].id,8) << toString(fidmax[i]+1,10)
-        << toString(tgt1[tidmax[i]].pos.x,10,5)
-        << toString(tgt1[tidmax[i]].pos.y,10,5)
+        << " " << toString(tgt1[tidmax[i]].pos.x,10,5)
+        << " " << toString(tgt1[tidmax[i]].pos.y,10,5)
+        << " " << toString(rad2degr*tgt1[tidmax[i]].radec.phi,10,5)
+        << " " << toString(90-rad2degr*tgt1[tidmax[i]].radec.theta,10,5)
         << endl;
       }
     cout << toString(cnt++,6)
@@ -841,7 +845,8 @@ int main(int argc, const char ** argv)
   if (params.param_present("ra")||params.param_present("dec"))
     center=radec2ptg (params.find<double>("ra"), params.find<double>("dec"));
   else
-    center=pointing(getCenter(readTargets(params.find<string>("input"),params.find<string>("time"))));
+    center=pointing(getCenter(readTargets(params.find<string>("input"),
+           params.find<string>("time"))));
 
 cout << "center radec: "<<center << endl;
 
