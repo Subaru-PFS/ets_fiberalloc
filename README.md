@@ -32,7 +32,7 @@ stops. It is computed like this:
 
   fract := obs_time/total_time
 
-- "time" is a ISO 8601 string containing the date and time of the observation.
+- "time" is an ISO 8601 string containing the date and time of the observation.
   This is needed to calculate the telescope elevation, the exact azimuth and altitude
   of the targets as seen from Subaru, and the distortion of target positions in the
   instrument's focal plane.
@@ -40,7 +40,9 @@ stops. It is computed like this:
   accepted. If necessary, the parser can be made more flexible.
 
 - "output" is an optional parameter. If present, it is the name of a file into
-which detailed fiber assignment data is written.
+which detailed fiber assignment data is written, including target IDs and the
+fiber IDs to which they are assigned, as well as focal plane coordinates and
+RA/DEC of the targets.
 
 - "ra" and "dec" are optional parameters specifying the approximate telescope
 pointing (in degrees). If not specified, the code will use the geometrical
@@ -59,7 +61,7 @@ Default is 5.
 
 - "dptg" is an optional parameter describing the maximum deviation (in millimeters
 on the PFI plane) from the specified RA/DEC when searching for the optimal
-telescope pointing. Default is 4 degrees.
+telescope pointing. Default is 4mm.
 
 - "nptg" is the number of different pointings tried (in both directions)
 when searching for the optimal telescope pointing. Default is 5.
