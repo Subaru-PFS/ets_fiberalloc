@@ -64,9 +64,9 @@ class Target
     pointing radec, altaz;
     double time;
     int pri;
-    int id;
+    string id;
 
-    Target (const pointing &radec_, double time_, int id_, int pri_)
+    Target (const pointing &radec_, double time_, const string &id_, int pri_)
       : radec(radec_), time(time_), pri(pri_), id(id_) {}
   };
 
@@ -723,7 +723,7 @@ void subprocess (const vector<Target> &tgt, const pointing &center0,
            "RA        DEC" << endl;
       //FIXME: add PFI coordinates
       for (size_t i=0; i<tidmax.size(); ++i)
-        fout << toString(tgt1[tidmax[i]].id,8) << toString(fidmax[i]+1,10)
+        fout << tgt1[tidmax[i]].id << toString(fidmax[i]+1,10)
         << " " << toString(tgt1[tidmax[i]].pos.x,10,5)
         << " " << toString(tgt1[tidmax[i]].pos.y,10,5)
         << " " << toString(rad2degr*tgt1[tidmax[i]].radec.phi,10,5)
@@ -760,16 +760,11 @@ vector<Target> readTargets (const string &name, const string &time)
       {
       istringstream iss(line);
       double x,y,time;
-      string id0;
+      string id;
       int pri;
-      iss >> id0 >> x >> y >> time >> pri;
+      iss >> id >> x >> y >> time >> pri;
       if (iss)
-        {
-        planck_assert((id0.length()>2) && (id0.substr(0,2)=="ID"),
-          "identifier not starting with 'ID'");
-        int id=stringToData<int>(id0.substr(2));
         res.emplace_back(radec2ptg(x,y),time,id,pri);
-        }
       else
         cerr << "Warning: unrecognized format in '" << name << "', line "
              << lineno << ":\n" << line << endl;
@@ -790,7 +785,6 @@ void process(const string &name, double fract,
   vector<Target> tgt=readTargets(name,time);
   eq2hor eqtest((19+49/60.+32/3600.)*degr2rad, -(155+28/60.+34/3600.)*degr2rad, 4139.,time);
   pointing center_altaz(eqtest.radec2altaz(center));
-cout << "center altaz: "<<center_altaz << endl;
   {
   vector<Target> tmp(tgt), tgt2;
   targetToPFI(tmp, center_altaz, posang);
@@ -847,8 +841,6 @@ int main(int argc, const char ** argv)
   else
     center=pointing(getCenter(readTargets(params.find<string>("input"),
            params.find<string>("time"))));
-
-cout << "center radec: "<<center << endl;
 
   double posang=degr2rad*params.find<double>("posang",0.);
   double dposang=degr2rad*params.find<double>("dposang",4.);
