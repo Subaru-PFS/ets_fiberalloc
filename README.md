@@ -74,7 +74,7 @@ The columns within a line contain the following information:
  3. Dec. [deg.]
  4. Exposure Time [sec.]
  5. Priority [1(highest) - 15(lowest)]
- 6. Magnitude [ABmag] (optional)
+ 6. Magnitude [AB mag]. (optional)
  7. Redshift (optional)
  8. Object Type (optional)
 
