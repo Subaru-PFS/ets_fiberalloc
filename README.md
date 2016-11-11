@@ -15,22 +15,14 @@ with version 5.3 and above, but any 5.x will probably work).
 ## Running the demo:
 
 Try, for example:
-`./ets_demo assigner=naive input=<path/to>/Halo.dat fract=0.95 output=output.txt time=2016-04-03T08:00:00Z`
+`./ets_demo assigner=naive input=<path/to>/Halo.dat n_exposures=10 output=output.txt time=2016-04-03T08:00:00Z`
 
 Supported values for "assigner" are "naive", "draining" and "new".
 
 The algorithms are documented in the source code.
 
-- "fract" is the fraction of coverage that must be reached before the algorithm
-stops. It is computed like this:
-
-  total_time := sum over all sources to be observed times their planned
-                observation time
-
-  obs_time   := sum over all sources observed so far times their observation time
-                so far
-
-  fract := obs_time/total_time
+- "n_exposures" is the number of individual observations performed (with
+  potential repointing of the telescope in between).
 
 - "time" is an ISO 8601 string containing the date and time of the observation.
   This is needed to calculate the telescope elevation, the exact azimuth and altitude
@@ -74,19 +66,14 @@ The columns within a line contain the following information:
  3. Dec. [deg.]
  4. Exposure Time [sec.]
  5. Priority [1(highest) - 15(lowest)]
- 6. Magnitude [AB mag]. (optional)
- 7. Redshift (optional)
- 8. Object Type (optional)
-
-Lines starting with "#" are ignored.
+---- optionally ----
+ 6. Magnitude [ABmag]
+ 7. Redshift
+ 8. Object Type
 
 The code first loads the required data set, and then runs the fiber assignment
 algorithm assuming that the telescope points at the specified position
 position.
-
-Then all sources with a distance >190mm from the center are discarded. This is
-done for testing purposes only - to make sure all targets can be observed
-easily.
 
 For each exposure, the code
 - determines which targets are observed with which fibers
@@ -99,11 +86,10 @@ For each exposure, the code
   These lists are written to the output file, if specified.
 - subtracts the exposure time from the planned exposure times of the observed
   targets. If their time becomes <=0, they are removed from the target list.
-- repeats the above steps until a fraction of "fract" of the necessary total
-  observation time has been reached.
+- repeats the above steps until the requested number of exposures is reached.
 
-At each step, the fraction of allocated fibers and the fraction of obervations
-done so far and the necessary observations is printed.
+At each step, the fraction of allocated fibers and the accumulated fraction of
+total observation time is printed.
 
 Target priorities are taken into account by the assignment algorithms.
 

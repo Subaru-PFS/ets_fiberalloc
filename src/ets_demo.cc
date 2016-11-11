@@ -689,7 +689,7 @@ template<typename T> string toString(const T&val, int w, int p)
 
 void subprocess (const vector<Target> &tgt, const pointing &center0,
   double dptg, int nptg, double posang0, double dposang, int nposang,
-  double fract, ofstream &fout, const FiberAssigner &ass)
+  int n_exposures, ofstream &fout, const FiberAssigner &ass)
   {
   vector<Target> tgt1=tgt;
   double ttime=0., acc=0., time2=0.;
@@ -700,7 +700,7 @@ void subprocess (const vector<Target> &tgt, const pointing &center0,
   cout << endl << "tile # | fiber allocation fraction | "
                   "total observation fraction | time"
        << endl;
-  while (true)
+  for (int expo=0; expo<n_exposures; ++expo)
     {
     pointing center(center0);
     double posang(posang0);
@@ -734,7 +734,6 @@ void subprocess (const vector<Target> &tgt, const pointing &center0,
          << toString(tidmax.size()/double(nfiber),18,5)
          << toString(acc/ttime,28,5)
          << toString(time2,20,0) << endl;
-    if (acc/ttime>fract) break;
     strip (tgt1,tidmax,time);
     }
   }
@@ -777,7 +776,7 @@ vector<Target> readTargets (const string &name, const string &time)
   return res;
   }
 
-void process(const string &name, double fract,
+void process(const string &name, int n_exposures,
   const pointing &center, double dptg, int nptg, double posang, double dposang,
   int nposang, const string &out, const string &time,
   const FiberAssigner &ass)
@@ -785,6 +784,8 @@ void process(const string &name, double fract,
   vector<Target> tgt=readTargets(name,time);
   eq2hor eqtest((19+49/60.+32/3600.)*degr2rad, -(155+28/60.+34/3600.)*degr2rad, 4139.,time);
   pointing center_altaz(eqtest.radec2altaz(center));
+
+#if 0
   {
   vector<Target> tmp(tgt), tgt2;
   targetToPFI(tmp, center_altaz, posang);
@@ -793,11 +794,13 @@ void process(const string &name, double fract,
       tgt2.push_back(tgt[i]);
   tgt.swap(tgt2);
   }
+#endif
+
   ofstream fout;
   if (out!="")
     { fout.open(out); planck_assert(fout,"error opening output file"); }
   subprocess (tgt, center_altaz, dptg, nptg, posang, dposang, nposang,
-    fract, fout, ass);
+    n_exposures, fout, ass);
   }
 
 /*! Finds the smallest circle enclosing all locations in \a tgt and returns
@@ -848,6 +851,6 @@ int main(int argc, const char ** argv)
   double dptg=degr2rad*params.find<double>("dptg",4./320.);// should roughly correspond to 4mm in PFI plane
   int nptg=params.find<int>("nptg",5);
   process (params.find<string>("input"),
-    params.find<double>("fract"),center,dptg,nptg,posang,dposang,nposang,
+    params.find<int>("n_exposures",1),center,dptg,nptg,posang,dposang,nposang,
     params.find<string>("output",""),params.find<string>("time"),*pass);
   }
