@@ -127,7 +127,7 @@ algorithm based on the maximum-flow graph approach (Goldberg 1997, J. Algorithms
 22, 1), similar to SDSS (Blanton et al. 2003, AJ 125, 2276). This algorithm is
 proven to be optimal and runs in polynomial time.
 
-Unfortunately the characteristics of both the instrument and the surveys differ
+Unfortunately the characteristics of both the instruments and the surveys differ
 very much between SDSS and PFS. In SDSS
 - all fibers could be placed almost anywhere on the whole focal plane, as long
   as they were not too close to other fibers
@@ -145,7 +145,7 @@ observation strategy depends much more on telescope pointing and orientation
 than it does for SDSS. However, selecting optimal pointing and orientation is
 not covered by the network flow algorithm and is a NP-hard problem.
 
-SDSS had to adopt a special (not provably optimal) approach for potentially
+SDSS had to adopt a special (probably not optimal) approach for potentially
 colliding targets; for its target distribution this was not a big problem. In
 the case of the planned PFS surveys, the fact that practically all targets are
 potentially colliding defeats the purpose of the network-flow approach.
