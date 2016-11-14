@@ -192,6 +192,11 @@ constexpr double rmax=4.75; // maximum radius of a fiber patrol area
 constexpr double r_kernel=4.75; // radius of the priority function kernel
 constexpr double dotdist=1.375; // radius of the dot blocking area
 constexpr double colldist=2; // minimum distance between fiber positioners
+// Latitude and longitude of the obseratory (radian)
+const double obs_lat=(19+49/60.+32/3600.)*degr2rad,
+                 obs_lon=-(155+28/60.+34/3600.)*degr2rad;
+// Height of the observatory (meters above sea level)
+const double obs_height=4139.;
 
 /*! Class providing efficient queries for locations on a 2D plane */
 class fpraster
@@ -281,8 +286,10 @@ void rotate (vec2 &pos, double sa, double ca)
     \note This is still very preliminary, incomplete and approximate! */
 void targetToPFI(vector<Target> &tgt, const pointing &los, double psi)
   {
-  vec3 z{los}, sky{0,0,1};
-  vec3 x=(sky-z*dotprod(z,sky)).Norm();
+  // altitude and azimuth of North celestial pole:
+  pointing altaz_ncp (halfpi-obs_lat,0.);
+  vec3 z{los}, skypole(altaz_ncp);
+  vec3 x=(skypole-z*dotprod(z,skypole)).Norm();
   vec3 y=crossprod(z,x);
   double cpsi=cos(psi),spsi=sin(psi);
   const double a0=0., a1=-3.2e2, a2=-1.37e1, a3=-7.45e0;
@@ -769,7 +776,7 @@ vector<Target> readTargets (const string &name, const string &time)
              << lineno << ":\n" << line << endl;
       }
     }
-  eq2hor eqtest((19+49/60.+32/3600.)*degr2rad, -(155+28/60.+34/3600.)*degr2rad, 4139.,time);
+  eq2hor eqtest(obs_lat, obs_lon, obs_height, time);
   for (auto &t:res)
     t.altaz=eqtest.radec2altaz(t.radec);
 
@@ -782,7 +789,7 @@ void process(const string &name, int n_exposures,
   const FiberAssigner &ass)
   {
   vector<Target> tgt=readTargets(name,time);
-  eq2hor eqtest((19+49/60.+32/3600.)*degr2rad, -(155+28/60.+34/3600.)*degr2rad, 4139.,time);
+  eq2hor eqtest(obs_lat, obs_lon, obs_height, time);
   pointing center_altaz(eqtest.radec2altaz(center));
 
 #if 0
