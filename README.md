@@ -15,7 +15,7 @@ with version 5.3 and above, but any 5.x will probably work).
 ## Running the demo:
 
 Try, for example:
-`./ets_demo assigner=naive input=<path/to>/Halo.dat n_exposures=10 output=output.txt time=2016-04-03T08:00:00Z`
+`./ets_demo assigner=naive input=data/ets_test_data.dat n_exposures=10 output=output.txt time=2016-04-03T08:00:00Z`
 
 Supported values for "assigner" are "naive", "draining" and "new".
 
