@@ -1,7 +1,10 @@
 ## Overview over the files:
 
-src/ets_demo.cc
+src/ets_demo.cc:
 Main file containing the experimental fiber assignment code.
+
+src/astronomy.*:
+Code for computing the RA/Dec -> alt/AZ conversion.
 
 Directory src/external/
 C and C++ sources that were originally developed for the Planck simulation
@@ -66,10 +69,9 @@ The columns within a line contain the following information:
  3. Dec. [deg.]
  4. Exposure Time [sec.]
  5. Priority [1(highest) - 15(lowest)]
----- optionally ----
- 6. Magnitude [ABmag]
- 7. Redshift
- 8. Object Type
+ 6. Magnitude [ABmag] (optional)
+ 7. Redshift (optional
+ 8. Object Type (optional)
 
 The code first loads the required data set, and then runs the fiber assignment
 algorithm assuming that the telescope points at the specified position
