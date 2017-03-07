@@ -16,7 +16,7 @@ Simply type "make". This requires a fairly recent version of GNU g++ (tested
 with version 5.3 and above, but any 5.x will probably work).
 
 If you have Google's "or-tools" package installed, you can also use the command
-"ORTOOLS=<root_directory_of_ortools> make". This will enable an additional,
+"ORTOOLS=&lt;root_directory_of_ortools&gt; make". This will enable an additional,
 experimental assigning algorithm.
 
 ## Running the demo:
