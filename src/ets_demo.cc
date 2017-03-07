@@ -1,27 +1,30 @@
 /*
  *  This file is part of ets_fiber_assigner.
  *
- *  ets_finer_assigner is free software; you can redistribute it and/or modify
+ *  ets_fiber_assigner is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
  *  the Free Software Foundation; either version 2 of the License, or
  *  (at your option) any later version.
  *
- *  ets_finer_assigner is distributed in the hope that it will be useful,
+ *  ets_fiber_assigner is distributed in the hope that it will be useful,
  *  but WITHOUT ANY WARRANTY; without even the implied warranty of
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with ets_finer_assigner; if not, write to the Free Software
+ *  along with ets_fiber_assigner; if not, write to the Free Software
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
 /*
- *  ets_finer_assigner is being developed at the Max-Planck-Institut fuer
+ *  ets_fiber_assigner is being developed at the Max-Planck-Institut fuer
  *  Astrophysik.
  */
 
-/*! \file ets_demo.cc */
+/*! \file ets_demo.cc
+ *  Copyright (C) 2016-2017 Max-Planck-Society
+ *  Author: Martin Reinecke
+ */
 
 #include <vector>
 #include <set>
@@ -31,6 +34,10 @@
 #include <fstream>
 #include <memory>
 #include <regex>
+
+#ifdef HAVE_ORTOOLS
+#include "graph/min_cost_flow.h"
+#endif
 
 #include "error_handling.h"
 #include "string_utils.h"
@@ -594,7 +601,86 @@ class NewAssigner: public FiberAssigner
       fix_priority(tgt,t2f,raster,itgt,pri);
       }
     }
-};
+  };
+
+#ifdef HAVE_ORTOOLS
+class NetworkAssigner: public FiberAssigner
+  {
+  /*! Assignment using min-cost network flow algorithm. Currently, collisions
+      are ignored. Priorities are ignored as well.
+      Performance of the algorithm lies between naive and draining assigner */
+  virtual void assign (const vector<Target> &tgt,
+    vector<size_t> &tid, vector<size_t> &fid) const
+    {
+    using namespace operations_research;
+    tid.clear(); fid.clear();
+    vector<size_t> head,tail,xarc;
+    fpraster raster=tgt2raster(tgt,100,100);
+    vector<vector<size_t>> f2t,t2f;
+    calcMappings(tgt,raster,f2t,t2f);
+    size_t nfibers=f2t.size();
+    size_t ntgt=t2f.size();
+    size_t nnodes=nfibers+ntgt+2;
+    size_t narcs=0;
+    for (auto x: f2t) narcs+=x.size();
+    narcs+=nfibers+ntgt+1;
+    StarGraph graph(nnodes, narcs);
+    MinCostFlow min_cost_flow(&graph);
+    // Source node is 0;
+    // fiber nodes are [1; nfibers];
+    // target nodes are [nfibers+1; nfibers+ntgt];
+    // sink node is nfibers+ntgt+1.
+
+    // Arcs from source to fibers
+    for (size_t i=0; i<nfibers; ++i)
+      {
+      ArcIndex arc = graph.AddArc(0, 1+i);
+      min_cost_flow.SetArcUnitCost(arc, 1);
+      min_cost_flow.SetArcCapacity(arc, 1);
+      }
+    // Arcs between fibers and targets
+    for (size_t i=0; i<nfibers; ++i)
+      for (size_t j=0; j<f2t[i].size(); ++j)
+        {
+        size_t arc=graph.AddArc(1+i, 1+nfibers+f2t[i][j]);
+        xarc.push_back(arc);
+        head.push_back(i); tail.push_back(f2t[i][j]);
+        min_cost_flow.SetArcUnitCost(arc, 1);
+        min_cost_flow.SetArcCapacity(arc, 1);
+        }
+    // Arcs from targets to sink
+    for (size_t i=0; i<ntgt; ++i)
+      {
+      ArcIndex arc = graph.AddArc(1+nfibers+i, 1+nfibers+ntgt);
+      min_cost_flow.SetArcUnitCost(arc, 1);
+      min_cost_flow.SetArcCapacity(arc, 1);
+      }
+    // overflow arc
+    {
+    ArcIndex arc = graph.AddArc(0, 1+nfibers+ntgt);
+    min_cost_flow.SetArcUnitCost(arc, 1000000);
+    min_cost_flow.SetArcCapacity(arc, 1000000);
+    }
+    // source node
+    min_cost_flow.SetNodeSupply(0, nfibers);
+    // passive nodes
+    for (size_t i=0; i<nfibers+ntgt; ++i)
+      min_cost_flow.SetNodeSupply(i+1,0);
+    // sink node
+    min_cost_flow.SetNodeSupply(1+nfibers+ntgt,-nfibers);
+    CHECK(min_cost_flow.Solve());
+    CHECK_EQ(MinCostFlow::OPTIMAL, min_cost_flow.status());
+    // Extract the solution
+    for (size_t i=0; i<xarc.size(); ++i)
+      if (min_cost_flow.Flow(xarc[i])>0)
+        {
+        fid.push_back(head[i]);
+        tid.push_back(tail[i]);
+        }
+    CostValue total_flow_cost = min_cost_flow.GetOptimalCost();
+    }
+  };
+#endif
 
 /*! Discard targets that are too far away from the PFS. */
 vector<size_t> select_observable (const vector<Target> &tgt, double safety)
@@ -843,6 +929,10 @@ int main(int argc, const char ** argv)
     pass=make_unique<DrainingAssigner>();
   else if (assignerName=="new")
     pass=make_unique<NewAssigner>();
+#ifdef HAVE_ORTOOLS
+  else if (assignerName=="network")
+    pass=make_unique<NetworkAssigner>();
+#endif
   else
     planck_fail("unknown assigner");
   pointing center;

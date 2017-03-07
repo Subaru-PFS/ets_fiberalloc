@@ -15,12 +15,17 @@ pipeline and can be re-used for ETS
 Simply type "make". This requires a fairly recent version of GNU g++ (tested
 with version 5.3 and above, but any 5.x will probably work).
 
+If you have Google's "or-tools" package installed, you can also use the command
+"ORTOOLS=<root_directory_of_ortools> make". This will enable an additional,
+experimental assigning algorithm.
+
 ## Running the demo:
 
 Try, for example:
 `./ets_demo assigner=naive input=data/ets_test_data.dat n_exposures=10 output=output.txt time=2016-04-03T08:00:00Z`
 
-Supported values for "assigner" are "naive", "draining" and "new".
+Supported values for "assigner" are "naive", "draining" and "new". Additionally,
+  the value "network" is accepted if the code was compiled with or-tools.
 
 The algorithms are documented in the source code.
 
@@ -121,6 +126,10 @@ Target priorities are taken into account by the assignment algorithms.
       r_ij=0 and drop off to zero for radii around the fiber patrol radius.
       This function ensures that each fiber is assigned to more 'crowded' areas of the
       target field first, with the goal of homogenizing the distribution of targets.
+
+4. Network:
+  - Solve a min-cost network to find a fiber configuration with the largest
+    number of assigned targets. Priorities and collisions are currently _ignored_.
 
 ### Comments on the choice of algorithm:
 

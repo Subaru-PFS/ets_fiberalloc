@@ -82,8 +82,14 @@ typedef uint16_t uint16;
 typedef int32_t int32;
 typedef uint32_t uint32;
 
+//FIXME: name collision with or-tools
+#ifdef HAVE_ORTOOLS
+typedef long long int64;
+typedef unsigned long long uint64;
+#else
 typedef int64_t int64;
 typedef uint64_t uint64;
+#endif
 
 #else
 
