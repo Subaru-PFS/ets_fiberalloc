@@ -26,6 +26,7 @@
  *  Author: Martin Reinecke
  */
 
+#include <random>
 #include <vector>
 #include <set>
 #include <string>
@@ -501,13 +502,26 @@ class FiberAssigner
 int maxpri_in_fiber (size_t fiber, const vector<Target> &tgt,
   const vector<vector<size_t>> &f2t)
   {
+  static std::random_device random_device;
+  static std::mt19937 engine{random_device()};
+
   planck_assert(!f2t[fiber].empty(), "searching in empty fiber");
-  size_t idx=0;
-  int maxpri = tgt[f2t[fiber][idx]].pri;
+  vector<size_t> tmp;
+  int maxpri = tgt[f2t[fiber][0]].pri;
+  tmp.push_back(0);
   for (size_t j=1; j<f2t[fiber].size(); ++j)
-    if (tgt[f2t[fiber][idx]].pri<maxpri)
-      { maxpri=tgt[f2t[fiber][idx]].pri; idx=j; }
-  return f2t[fiber][idx];
+    {
+    if (tgt[f2t[fiber][j]].pri==maxpri)
+      tmp.push_back(j);
+    else if (tgt[f2t[fiber][j]].pri<maxpri)
+      {
+      maxpri=tgt[f2t[fiber][j]].pri;
+      tmp.clear();
+      tmp.push_back(j);
+      }
+    }
+  std::uniform_int_distribution<size_t> dist(0, tmp.size() - 1);
+  return f2t[fiber][tmp[dist(engine)]];
   }
 
 class NaiveAssigner: public FiberAssigner
