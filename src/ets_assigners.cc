@@ -26,6 +26,8 @@
  *  Author: Martin Reinecke
  */
 
+#include <random>
+
 #ifdef HAVE_ORTOOLS
 #include "graph/min_cost_flow.h"
 #endif
