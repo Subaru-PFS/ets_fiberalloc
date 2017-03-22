@@ -1,7 +1,7 @@
 DEMO_DEP:=src/astronomy.cc src/ets_demo.cc src/ets_assigners.cc src/ets_tools.cc src/*.h src/external/*
 DEMO_SRC:=src/astronomy.cc src/ets_demo.cc src/ets_assigners.cc src/ets_tools.cc src/external/*.cc
-PYETS_DEP:=src/astronomy.cc src/pyETS.cc src/ets_assigners.cc src/*.h src/external/*
-PYETS_SRC:=src/astronomy.cc src/pyETS.cc src/ets_assigners.cc src/external/*.cc
+PYETS_DEP:=src/astronomy.cc src/pyETS.cc src/ets_assigners.cc src/ets_tools.cc src/*.h src/external/*
+PYETS_SRC:=src/astronomy.cc src/pyETS.cc src/ets_assigners.cc src/ets_tools.cc src/external/*.cc
 
 PYBIND_INC:=src
 PYFLAGS:=$(filter-out -Wstrict-prototypes,$(shell python-config --cflags --ldflags))
