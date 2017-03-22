@@ -36,13 +36,23 @@ class ETShelper
       fpraster raster=tgt2raster(tgt,100,100);
       calcMappings(tgt,raster,f2t,t2f);
       }
-    vector<vector<double>> getFiberpos() const
+    map<string,vector<double>> getFiberpos() const
       {
-      vector<vector<double>> res;
+      map<string,vector<double>> res;
       for (size_t i=0; i<nfiber; ++i)
         {
         vec2 fpos=id2fiberpos(i);
-        res.push_back({fpos.x,fpos.y});
+        res[dataToString(i+1)] = {fpos.x,fpos.y};
+        }
+      return res;
+      }
+    map<string,vector<double>> getDotpos() const
+      {
+      map<string,vector<double>> res;
+      for (size_t i=0; i<nfiber; ++i)
+        {
+        vec2 fpos=id2dotpos(i);
+        res[dataToString(i+1)] = {fpos.x,fpos.y};
         }
       return res;
       }
@@ -53,11 +63,16 @@ class ETShelper
         res[t.id]={t.pos.x,t.pos.y};
       return res;
       }
-    map<string,vector<size_t>> getVis() const
+    map<string,vector<string>> getVis() const
       {
-      map<string,vector<size_t>> res;
+      map<string,vector<string>> res;
       for (size_t i=0; i<t2f.size(); ++i)
-        res[tgt[i].id]=t2f[i];
+        {
+        vector<string> tmp;
+        for (auto j : t2f[i])
+          tmp.push_back(dataToString(j+1));
+        res[tgt[i].id]=tmp;
+        }
       return res;
       }
   };
@@ -82,6 +97,8 @@ PYBIND11_PLUGIN(pyETS)
       "t_id"_a,"t_ra"_a,"t_dec"_a,"tel_ra"_a,"tel_dec"_a,"posang"_a,"time"_a)
     .def("getFiberpos", &ETShelper::getFiberpos,
       "returns the positions (in mm on the PFI plane) of the Cobra centers")
+    .def("getDotpos", &ETShelper::getDotpos,
+      "returns the positions (in mm on the PFI plane) of the dots")
     .def("getTgtpos", &ETShelper::getTgtpos,
       "returns the positions (in mm on the PFI plane) of the visible targets")
     .def("getVis", &ETShelper::getVis,
