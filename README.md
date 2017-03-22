@@ -131,6 +131,15 @@ Target priorities are taken into account by the assignment algorithms.
   - Solve a min-cost network to find a fiber configuration with the largest
     number of assigned targets. Priorities and collisions are currently _ignored_.
 
+## Compiling the Python interface (VERY experimental!)
+
+Simply type "make pyETS". This produces the file "pyETS.so", which can be loaded
+from Python via "import pyETS"; help is available within Python via
+"help(pyETS)".
+
+CAUTION: this interface is currently meant for internal testing purposes only
+and will most likely change in non-backwards-compatible ways!
+
 ### Comments on the choice of algorithm:
 
 It is a justified question why ETS does not simply make use of an assigning
