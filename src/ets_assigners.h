@@ -41,6 +41,7 @@ class FiberAssigner
         assigned targets. Target IDs range from 0 to \a tgt.size()-1, fiber
         IDs from 0 to 2393. */
     virtual void assign (const std::vector<Target> &tgt,
+      const std::vector<Cobra> &cobras,
       std::vector<size_t> &tid, std::vector<size_t> &fid) const = 0;
 
     virtual ~FiberAssigner() {}

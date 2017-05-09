@@ -65,10 +65,21 @@ class Target
       : radec(radec_), time(time_), pri(pri_), id(id_) {}
   };
 
-constexpr size_t nfiber=3*57*14;
-constexpr double rmax=4.75; // maximum radius of a fiber patrol area
+class Cobra
+  {
+  public:
+    vec2 center;
+    double rmax;
+    vec2 dotpos;
+    double rdot;
+
+    Cobra(const vec2 &center_, double rmax_, const vec2 &dotpos_, double rdot_)
+      : center(center_), rmax(rmax_), dotpos(dotpos_), rdot(rdot_) {}
+  };
+
+std::vector<Cobra> makeCobras();
+
 constexpr double r_kernel=4.75; // radius of the priority function kernel
-constexpr double dotdist=1.375; // radius of the dot blocking area
 constexpr double colldist=2; // minimum distance between fiber positioners
 // Latitude and longitude of the obseratory (radian)
 const double obs_lat=(19+49/60.+32/3600.)*degr2rad,
@@ -164,14 +175,6 @@ inline void rotate (vec2 &pos, double sa, double ca)
     \note This is still very preliminary, incomplete and approximate! */
 void targetToPFI(std::vector<Target> &tgt, const pointing &los, double psi);
 
-/*! Computes the central fiber position in PFI coordinates, given the fiber ID.
-    Fiber ID is zero-based throughout this code, i.e. ranging from 0 to 2393. */
-vec2 id2fiberpos(int id);
-
-/*! Computes the position of a dot center in PFI coordinates, given a fiber ID.
-    Fiber ID is zero-based throughout this code, i.e. ranging from 0 to 2393. */
-vec2 id2dotpos(int id); // id is assumed to be in [0; 2394[
-
 /*! Remove a given value from a vector of integers. Assert that exactly one
     value was removed. */
 inline void stripout (std::vector<size_t> &v, size_t val)
@@ -204,7 +207,8 @@ void checkMappings (const vector<Target> &tgt,
 #endif
 
 /*! Computes the fiber->target and target->fiber mappings. */
-void calcMappings (const std::vector<Target> &tgt, const fpraster &raster,
+void calcMappings (const std::vector<Target> &tgt,
+  const std::vector<Cobra> &cobras, const fpraster &raster,
   std::vector<std::vector<size_t>> &f2t, std::vector<std::vector<size_t>> &t2f);
 
 /*! Given a target index \a itgt and a fiber index \a fiber observing this

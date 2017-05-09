@@ -44,10 +44,16 @@ using namespace std;
 namespace {
 
 /*! Discard targets that are too far away from the PFS. */
-vector<size_t> select_observable (const vector<Target> &tgt, double safety)
+vector<size_t> select_observable (const vector<Target> &tgt,
+  const vector<Cobra> &cobras, double safety)
   {
-  vector<vec2> fpos(nfiber);
-  for (size_t i=0; i<fpos.size(); ++i) fpos[i]=id2fiberpos(i);
+  vector<vec2> fpos(cobras.size());
+  double rmax=0;
+  for (size_t i=0; i<fpos.size(); ++i)
+    {
+    fpos[i]=cobras[i].center;
+    rmax=max(rmax,cobras[i].rmax);
+    }
   fpraster raster(fpos,100,100);
   vector<size_t> res;
   for (size_t i=0; i<tgt.size(); ++i)
@@ -56,19 +62,19 @@ vector<size_t> select_observable (const vector<Target> &tgt, double safety)
   return res;
   }
 
-void single_exposure(const vector<Target> &tgt, const pointing &center,
-  double posang, const FiberAssigner &ass,
+void single_exposure(const vector<Target> &tgt, const vector<Cobra> &cobras,
+  const pointing &center, double posang, const FiberAssigner &ass,
   vector<size_t> &tid, vector<size_t> &fid)
   {
   tid.clear(); fid.clear();
   vector<Target> tgt1(tgt);
   targetToPFI(tgt1, center, posang);
 #if 1
-  vector<size_t> idx = select_observable (tgt1, r_kernel);
+  vector<size_t> idx = select_observable (tgt1, cobras, r_kernel);
   vector<Target> tgt2;
   for (auto i:idx)
     tgt2.push_back(tgt1[i]);
-  if (!tgt2.empty()) ass.assign(tgt2,tid,fid);
+  if (!tgt2.empty()) ass.assign(tgt2,cobras,tid,fid);
   for (size_t i=0; i<tid.size(); ++i)
     tid[i]=idx[tid[i]];
 #else
@@ -78,9 +84,10 @@ void single_exposure(const vector<Target> &tgt, const pointing &center,
 
 } // unnamed namespace
 
-void optimal_exposure(const vector<Target> &tgt, pointing &center, double dptg,
-  int nptg, double &posang, double dposang, int nposang,
-  const FiberAssigner &ass, vector<size_t> &tid, vector<size_t> &fid)
+void optimal_exposure(const vector<Target> &tgt, const vector<Cobra> &cobras,
+  pointing &center, double dptg, int nptg, double &posang, double dposang,
+  int nposang, const FiberAssigner &ass, vector<size_t> &tid,
+  vector<size_t> &fid)
   {
   double posang0=posang;
   tid.clear(); fid.clear();
@@ -102,7 +109,7 @@ void optimal_exposure(const vector<Target> &tgt, pointing &center, double dptg,
         pointing newcenter(vcenter+(vdx*dx+vdy*dy));
         double newposang=posang0+da;
         vector<size_t> tid2,fid2;
-        single_exposure (tgt, newcenter, newposang, ass, tid2, fid2);
+        single_exposure (tgt, cobras, newcenter, newposang, ass, tid2, fid2);
         if (tid2.size()>tid.size())
           { tid=tid2; fid=fid2; center=newcenter; posang=newposang; }
         }
@@ -141,7 +148,8 @@ template<typename T> string toString(const T&val, int w, int p)
   return o.str();
   }
 
-void subprocess (const vector<Target> &tgt, const pointing &center0,
+void subprocess (const vector<Target> &tgt, const vector<Cobra> &cobras,
+  const pointing &center0,
   double dptg, int nptg, double posang0, double dposang, int nposang,
   int n_exposures, ofstream &fout, const FiberAssigner &ass)
   {
@@ -159,7 +167,7 @@ void subprocess (const vector<Target> &tgt, const pointing &center0,
     pointing center(center0);
     double posang(posang0);
     vector<size_t> tidmax, fidmax;
-    optimal_exposure(tgt1, center, dptg, nptg, posang, dposang, nposang,
+    optimal_exposure(tgt1, cobras, center, dptg, nptg, posang, dposang, nposang,
       ass, tidmax, fidmax);
     if (tidmax.empty()) break; // stop if no more fibers could be assigned
     double time=tgt1[tidmax[0]].time;
@@ -185,7 +193,7 @@ void subprocess (const vector<Target> &tgt, const pointing &center0,
         << endl;
       }
     cout << toString(cnt++,6)
-         << toString(tidmax.size()/double(nfiber),18,5)
+         << toString(tidmax.size()/double(cobras.size()),18,5)
          << toString(acc/ttime,28,5)
          << toString(time2,20,0) << endl;
     strip (tgt1,tidmax,time);
@@ -236,6 +244,7 @@ void process(const string &name, int n_exposures,
   const FiberAssigner &ass)
   {
   vector<Target> tgt=readTargets(name,time);
+  vector<Cobra> cobras(makeCobras());
   eq2hor eqtest(obs_lat, obs_lon, obs_height, time);
   pointing center_altaz(eqtest.radec2altaz(center));
 
@@ -253,7 +262,7 @@ void process(const string &name, int n_exposures,
   ofstream fout;
   if (out!="")
     { fout.open(out); planck_assert(fout,"error opening output file"); }
-  subprocess (tgt, center_altaz, dptg, nptg, posang, dposang, nposang,
+  subprocess (tgt, cobras, center_altaz, dptg, nptg, posang, dposang, nposang,
     n_exposures, fout, ass);
   }
 

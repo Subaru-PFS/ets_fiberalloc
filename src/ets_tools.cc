@@ -53,14 +53,10 @@ void targetToPFI(vector<Target> &tgt, const pointing &los, double psi)
     }
   }
 
-vec2 id2dotpos(int id) // id is assumed to be in [0; 2394[
-  {
-  const double dot_shift_y = 2.35;
-  vec2 res=id2fiberpos(id);
-  res.y+=dot_shift_y;
-  return res;
-  }
+namespace {
 
+/*! Computes the central fiber position in PFI coordinates, given the fiber ID.
+    Fiber ID is zero-based throughout this code, i.e. ranging from 0 to 2393. */
 vec2 id2fiberpos(int id)
   {
   int field=id/(57*14);
@@ -77,16 +73,40 @@ vec2 id2fiberpos(int id)
   return res;
   }
 
-void calcMappings (const vector<Target> &tgt, const fpraster &raster,
+/*! Computes the position of a dot center in PFI coordinates, given a fiber ID.
+    Fiber ID is zero-based throughout this code, i.e. ranging from 0 to 2393. */
+vec2 id2dotpos(int id) // id is assumed to be in [0; 2394[
+  {
+  const double dot_shift_y = 2.35;
+  vec2 res=id2fiberpos(id);
+  res.y+=dot_shift_y;
+  return res;
+  }
+
+}
+
+vector<Cobra> makeCobras()
+  {
+  constexpr size_t nfiber=3*57*14;
+  constexpr double rmax=4.75; // maximum radius of a fiber patrol area
+  constexpr double dotdist=1.375; // radius of the dot blocking area
+  vector<Cobra> res;
+  for (size_t i=0; i<nfiber; ++i)
+    res.emplace_back(id2fiberpos(i),rmax,id2dotpos(i),dotdist);
+  return res;
+  }
+
+void calcMappings (const vector<Target> &tgt, const vector<Cobra> &cobras,
+  const fpraster &raster,
   vector<vector<size_t>> &f2t, vector<vector<size_t>> &t2f)
   {
-  f2t=vector<vector<size_t>>(nfiber);
-  for (size_t i=0; i<nfiber; ++i)
+  f2t=vector<vector<size_t>>(cobras.size());
+  for (size_t i=0; i<cobras.size(); ++i)
     {
-    vec2 fp=id2fiberpos(i), dp=id2dotpos(i);
-    vector<size_t> tmp=raster.query(fp,rmax);
+    const auto &c(cobras[i]);
+    vector<size_t> tmp=raster.query(c.center,c.rmax);
     for (auto j : tmp)
-      if (dp.dsq(tgt[j].pos)>=dotdist*dotdist) f2t[i].push_back(j);
+      if (c.dotpos.dsq(tgt[j].pos)>=c.rdot*c.rdot) f2t[i].push_back(j);
     }
   t2f=vector<vector<size_t>>(tgt.size());
   for (size_t i=0; i<f2t.size(); ++i)

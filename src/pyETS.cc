@@ -14,10 +14,16 @@ namespace {
 namespace py = pybind11;
 
 /*! Discard targets that are too far away from the PFS. */
-vector<size_t> select_observable (const vector<Target> &tgt, double safety)
+vector<size_t> select_observable (const vector<Target> &tgt,
+  const vector<Cobra> &cobras, double safety)
   {
-  vector<vec2> fpos(nfiber);
-  for (size_t i=0; i<fpos.size(); ++i) fpos[i]=id2fiberpos(i);
+  vector<vec2> fpos(cobras.size());
+  double rmax=0;
+  for (size_t i=0; i<fpos.size(); ++i)
+    {
+    fpos[i]=cobras[i].center;
+    rmax=max(rmax,cobras[i].rmax);
+    }
   fpraster raster(fpos,100,100);
   vector<size_t> res;
   for (size_t i=0; i<tgt.size(); ++i)
@@ -31,6 +37,7 @@ class ETShelper
   private:
     vector<vector<size_t>> f2t,t2f;
     vector<Target> tgt;
+    vector<Cobra> cobras;
     pointing center;
 
   public:
@@ -53,26 +60,21 @@ class ETShelper
         t.altaz=eqtest.radec2altaz(t.radec);
       targetToPFI(tgt, center, posang);
       fpraster raster=tgt2raster(tgt,100,100);
-      calcMappings(tgt,raster,f2t,t2f);
+      cobras=makeCobras();
+      calcMappings(tgt,cobras,raster,f2t,t2f);
       }
     map<string,vector<double>> getFiberpos() const
       {
       map<string,vector<double>> res;
-      for (size_t i=0; i<nfiber; ++i)
-        {
-        vec2 fpos=id2fiberpos(i);
-        res[dataToString(i+1)] = {fpos.x,fpos.y};
-        }
+      for (size_t i=0; i<cobras.size(); ++i)
+        res[dataToString(i+1)] = {cobras[i].center.x,cobras[i].center.y};
       return res;
       }
     map<string,vector<double>> getDotpos() const
       {
       map<string,vector<double>> res;
-      for (size_t i=0; i<nfiber; ++i)
-        {
-        vec2 fpos=id2dotpos(i);
-        res[dataToString(i+1)] = {fpos.x,fpos.y};
-        }
+      for (size_t i=0; i<cobras.size(); ++i)
+        res[dataToString(i+1)] = {cobras[i].dotpos.x,cobras[i].dotpos.y};
       return res;
       }
     map<string,vector<double>> getTgtpos() const
@@ -99,14 +101,14 @@ class ETShelper
       map<string,string> res;
       vector<size_t> tid, fid;
       vector<Target> tgt1(tgt);
-      vector<size_t> idx = select_observable (tgt1, r_kernel);
+      vector<size_t> idx = select_observable (tgt1, cobras, r_kernel);
       vector<Target> tgt2;
       for (auto i:idx)
         tgt2.push_back(tgt1[i]);
       if (!tgt2.empty())
         {
         unique_ptr<FiberAssigner> pass=make_assigner(assigner);
-        pass->assign(tgt2,tid,fid);
+        pass->assign(tgt2,cobras,tid,fid);
         }
       for (size_t i=0; i<tid.size(); ++i)
         res[tgt[idx[tid[i]]].id] = dataToString(fid[i]+1);

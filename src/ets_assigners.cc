@@ -269,13 +269,13 @@ class NaiveAssigner: public FiberAssigner
   /*! Naive assignment algorithm: iterate over all fibers, and if a fiber has
       targets in its patrol area, assign the target with the highest priority
       to it. */
-  virtual void assign (const vector<Target> &tgt,
+  virtual void assign (const vector<Target> &tgt, const std::vector<Cobra> &cobras,
     vector<size_t> &tid, vector<size_t> &fid) const
     {
     tid.clear(); fid.clear();
     fpraster raster=tgt2raster(tgt,100,100);
     vector<vector<size_t>> f2t,t2f;
-    calcMappings(tgt,raster,f2t,t2f);
+    calcMappings(tgt,cobras,raster,f2t,t2f);
 
     for (size_t fiber=0; fiber<f2t.size(); ++fiber)
       {
@@ -294,13 +294,13 @@ class DrainingAssigner: public FiberAssigner
       find the fiber(s) with the smallest number of observable targets >0;
       for the first of the returned fibers, assign the target with highest
       priority to it; repeat until no more targets are observable. */
-  virtual void assign (const vector<Target> &tgt,
+  virtual void assign (const vector<Target> &tgt, const std::vector<Cobra> &cobras,
     vector<size_t> &tid, vector<size_t> &fid) const
     {
     tid.clear(); fid.clear();
     fpraster raster=tgt2raster(tgt,100,100);
     vector<vector<size_t>> f2t,t2f;
-    calcMappings(tgt,raster,f2t,t2f);
+    calcMappings(tgt,cobras,raster,f2t,t2f);
 
     size_t maxtgt=0;
     for (const auto &f:f2t)
@@ -329,13 +329,13 @@ class NewAssigner: public FiberAssigner
       the distance of all other targets in its close vicinity; process targets
       in order of decreasing priority and assign them to fibers, if possible.
       After each assignment, update the priority of the remaining targets. */
-  virtual void assign (const vector<Target> &tgt,
+  virtual void assign (const vector<Target> &tgt, const std::vector<Cobra> &cobras,
     vector<size_t> &tid, vector<size_t> &fid) const
     {
     tid.clear(); fid.clear();
     fpraster raster=tgt2raster(tgt,100,100);
     vector<vector<size_t>> f2t,t2f;
-    calcMappings(tgt,raster,f2t,t2f);
+    calcMappings(tgt,cobras,raster,f2t,t2f);
     pqueue<pq_entry> pri=calc_pri(tgt,t2f,raster);
 
     while (true)
