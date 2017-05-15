@@ -37,6 +37,8 @@ using namespace std;
 
 namespace {
 
+constexpr int randseed=42;
+
 /*! Priority queue that allows changing the priority of its entries after
     its creation
     Originally developed for Gadget 4. */
@@ -218,8 +220,7 @@ int maxpri_in_fiber (size_t fiber, const std::vector<Target> &tgt,
   const std::vector<std::vector<size_t>> &f2t)
   {
   using namespace std;
-  static std::random_device random_device;
-  static std::mt19937 engine{random_device()};
+  static std::mt19937 engine{randseed};
 
   planck_assert(!f2t[fiber].empty(), "searching in empty fiber");
 #if 1
