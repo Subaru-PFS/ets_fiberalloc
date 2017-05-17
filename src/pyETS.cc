@@ -32,6 +32,16 @@ vector<size_t> select_observable (const vector<Target> &tgt,
   return res;
   }
 
+map<string,vector<double>> getAllCobras()
+  {
+  map<string,vector<double>> res;
+  auto c=makeCobras();
+  for (size_t i=0; i<c.size(); ++i)
+    res[dataToString(i+1)] = {c[i].center.x,c[i].center.y,c[i].rmax,
+                              c[i].dotpos.x,c[i].dotpos.y,c[i].rdot};
+  return res;
+  }
+
 class ETShelper
   {
   private:
@@ -46,6 +56,7 @@ class ETShelper
               const vector<double> &t_dec,
               const vector<double> &t_time,
               const vector<int> &t_pri,
+              const map<string,vector<double>> &cbr,
               double tel_ra, double tel_dec, double posang, string time)
       {
       center=radec2ptg(tel_ra, tel_dec);
@@ -60,22 +71,15 @@ class ETShelper
         t.altaz=eqtest.radec2altaz(t.radec);
       targetToPFI(tgt, center, posang);
       fpraster raster=tgt2raster(tgt,100,100);
-      cobras=makeCobras();
+      if (cbr.empty())
+        cobras=makeCobras();
+      else
+        for (auto it=cbr.begin(); it!=cbr.end(); ++it)
+          {
+          auto d(it->second);
+          cobras.emplace_back(vec2(d[0],d[1]),d[2],vec2(d[3],d[4]),d[5]);
+          }
       calcMappings(tgt,cobras,raster,f2t,t2f);
-      }
-    map<string,vector<double>> getFiberpos() const
-      {
-      map<string,vector<double>> res;
-      for (size_t i=0; i<cobras.size(); ++i)
-        res[dataToString(i+1)] = {cobras[i].center.x,cobras[i].center.y};
-      return res;
-      }
-    map<string,vector<double>> getDotpos() const
-      {
-      map<string,vector<double>> res;
-      for (size_t i=0; i<cobras.size(); ++i)
-        res[dataToString(i+1)] = {cobras[i].dotpos.x,cobras[i].dotpos.y};
-      return res;
       }
     map<string,vector<double>> getTgtpos() const
       {
@@ -127,23 +131,20 @@ PYBIND11_PLUGIN(pyETS)
   py::class_<ETShelper>(m, "ETShelper")
     .def(py::init<const vector<string>&,const vector<double>&,
       const vector<double> &, const vector<double> &, const vector<int> &,
-      double, double, double, string>(),
+      const map<string,vector<double>> &, double, double, double, string>(),
       "Args:\n"
       "  t_id   : Target IDs\n"
       "  t_ra   : Target rectascensions (in degrees)\n"
       "  t_dec  : target declinations (in degrees)\n"
       "  t_time : requested target observation times (in seconds) (unused)\n"
       "  t_pri  : target priorities\n"
+      "  cbr    : dictionary of cobras\n"
       "  tel_ra : telescope pointing rectascension (in degrees)\n"
       "  tel_dec: telescope pointing declination (in degrees)\n"
       "  posang : telescope position angle (in degrees)\n"
       "  time   : obervation time in the format 'yyyy-mm-ddThh:mm:ssZ'",
-      "t_id"_a,"t_ra"_a,"t_dec"_a,"t_time"_a,"t_pri"_a,"tel_ra"_a,"tel_dec"_a,
-      "posang"_a,"time"_a)
-    .def("getFiberpos", &ETShelper::getFiberpos,
-      "returns the positions (in mm on the PFI plane) of the Cobra centers")
-    .def("getDotpos", &ETShelper::getDotpos,
-      "returns the positions (in mm on the PFI plane) of the dots")
+      "t_id"_a,"t_ra"_a,"t_dec"_a,"t_time"_a,"t_pri"_a,"cbr"_a,"tel_ra"_a,
+      "tel_dec"_a,"posang"_a,"time"_a)
     .def("getTgtpos", &ETShelper::getTgtpos,
       "returns the positions (in mm on the PFI plane) of the visible targets")
     .def("getVis", &ETShelper::getVis,
@@ -152,5 +153,14 @@ PYBIND11_PLUGIN(pyETS)
       "returns the targets that would be chosen by the provided assigner "
       "algorithm, as well as the fibers observing them","assigner"_a)
 ;
+  m.def("getAllCobras", &getAllCobras,
+    "returns a dictionary containing all cobras. A cobra is defined by a\n"
+    "5-tuple of real numbers (unit is mm):\n"
+    "  x position of the cobra center\n"
+    "  y position pf the cobra center\n"
+    "  radius of patrol area\n"
+    "  x position of the dot\n"
+    "  y position of the dot\n"
+    "  dot radius");
   return m.ptr();
   }
