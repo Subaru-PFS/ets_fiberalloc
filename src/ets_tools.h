@@ -79,8 +79,9 @@ class Cobra
 
 std::vector<Cobra> makeCobras();
 
+void setCollisionDistance(double dist);
+
 constexpr double r_kernel=4.75; // radius of the priority function kernel
-constexpr double colldist=2; // minimum distance between fiber positioners
 // Latitude and longitude of the obseratory (radian)
 const double obs_lat=(19+49/60.+32/3600.)*degr2rad,
                  obs_lon=-(155+28/60.+34/3600.)*degr2rad;

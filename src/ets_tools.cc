@@ -30,6 +30,15 @@
 
 using namespace std;
 
+namespace {
+
+double colldist=2;
+
+} // unnamed namespace
+
+void setCollisionDistance(double dist)
+  {colldist=dist; }
+
 void targetToPFI(vector<Target> &tgt, const pointing &los, double psi)
   {
   // altitude and azimuth of North celestial pole:
@@ -124,12 +133,18 @@ void cleanup (const vector<Target> &tgt, const fpraster &raster,
   // remove everything related to the selected fiber
   for (auto curtgt : f2t[fiber]) stripout(t2f[curtgt],fiber);
   f2t[fiber].clear();
-  // remove target and everything in blocking area
-  vector<size_t> tmp=raster.query(tgt[itgt].pos,colldist);
-  for (auto i : tmp)
+  // remove target
+  for (auto j : t2f[itgt]) stripout(f2t[j],itgt);
+  t2f[itgt].clear();
+  // remove everything in blocking area
+  if (colldist>0.)
     {
-    for (auto j : t2f[i]) stripout(f2t[j],i);
-    t2f[i].clear();
+    vector<size_t> tmp=raster.query(tgt[itgt].pos,colldist);
+    for (auto i : tmp)
+      {
+      for (auto j : t2f[i]) stripout(f2t[j],i);
+      t2f[i].clear();
+      }
     }
 //  checkMappings(tgt,f2t,t2f);
   }

@@ -162,5 +162,9 @@ PYBIND11_PLUGIN(pyETS)
     "  x position of the dot\n"
     "  y position of the dot\n"
     "  dot radius");
+  m.def("setCollisionDistance", &setCollisionDistance,
+    "Sets the collision distance between cobra tips to dist millimeters.\n"
+    "If dist<=0, no collisions are possible.\n"
+    "Standard collision distance is 2mm.", "dist"_a);
   return m.ptr();
   }
