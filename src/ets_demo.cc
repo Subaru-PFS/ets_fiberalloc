@@ -177,11 +177,11 @@ void subprocess (const vector<Target> &tgt, const vector<Cobra> &cobras,
     targetToPFI(tgt1,center,posang);
     if (fout.is_open())
       {
-      fout << "Exposure " << cnt << ": duration " << time << "s, "
+      fout << "# Exposure " << cnt << ": duration " << time << "s, "
         "AZ: " << rad2degr*center.phi << ", ALT " << 90-rad2degr*center.theta
         << " PA: " << rad2degr*posang << endl
-        << "  Target     Fiber          X          Y         "
-           "RA        DEC" << endl;
+        << "# Target    Fiber          X          Y         "
+           "RA        DEC     exp" << endl;
       //FIXME: add PFI coordinates
       for (size_t i=0; i<tidmax.size(); ++i)
         fout << tgt1[tidmax[i]].id << toString(fidmax[i]+1,10)
@@ -189,6 +189,7 @@ void subprocess (const vector<Target> &tgt, const vector<Cobra> &cobras,
         << " " << toString(tgt1[tidmax[i]].pos.y,10,5)
         << " " << toString(rad2degr*tgt1[tidmax[i]].radec.phi,10,5)
         << " " << toString(90-rad2degr*tgt1[tidmax[i]].radec.theta,10,5)
+        << " " << toString(cnt,7)
         << endl;
       }
     cout << toString(cnt++,6)
