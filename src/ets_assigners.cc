@@ -223,7 +223,6 @@ int maxpri_in_fiber (size_t fiber, const std::vector<Target> &tgt,
   static std::mt19937 engine{randseed};
 
   planck_assert(!f2t[fiber].empty(), "searching in empty fiber");
-#if 1
   vector<size_t> tmp;
   int maxpri = tgt[f2t[fiber][0]].pri;
   tmp.push_back(0);
@@ -240,8 +239,13 @@ int maxpri_in_fiber (size_t fiber, const std::vector<Target> &tgt,
     }
   std::uniform_int_distribution<size_t> dist(0, tmp.size() - 1);
   return f2t[fiber][tmp[dist(engine)]];
-#else
-  vec2 fpos=id2fiberpos(fiber);
+  }
+
+int maxpri_in_fiber_closest (size_t fiber, const std::vector<Target> &tgt,
+  const std::vector<Cobra> &cobras, const std::vector<std::vector<size_t>> &f2t)
+  {
+  using namespace std;
+  vec2 fpos=cobras[fiber].center;
   int maxpri = tgt[f2t[fiber][0]].pri;
   double mindsq=fpos.dsq(tgt[f2t[fiber][0]].pos);
   size_t idx=0;
@@ -260,7 +264,6 @@ int maxpri_in_fiber (size_t fiber, const std::vector<Target> &tgt,
       }
     }
   return f2t[fiber][idx];
-#endif
   }
 
 } // unnamed namespace
@@ -316,6 +319,42 @@ class DrainingAssigner: public FiberAssigner
           { fiber=i; mintgt=f2t[i].size(); }
       if (fiber==-1) break; // assignment done
       int itgt = maxpri_in_fiber(fiber,tgt,f2t);
+      tid.push_back(itgt);
+      fid.push_back(fiber);
+      cleanup(tgt,raster,f2t,t2f,fiber,itgt);
+      }
+    }
+  };
+
+class DrainingClosestAssigner: public FiberAssigner
+  {
+  /*! Assignment strategy modeled after Morales et al. 2012: MNRAS 419, 1187
+      find the fiber(s) with the smallest number of observable targets >0;
+      for the first of the returned fibers, assign the target with highest
+      priority to it; if there is more than one of those, choose the one closest
+      to the center of the patrol area;
+      repeat until no more targets are observable. */
+  virtual void assign (const vector<Target> &tgt, const std::vector<Cobra> &cobras,
+    vector<size_t> &tid, vector<size_t> &fid) const
+    {
+    tid.clear(); fid.clear();
+    fpraster raster=tgt2raster(tgt,100,100);
+    vector<vector<size_t>> f2t,t2f;
+    calcMappings(tgt,cobras,raster,f2t,t2f);
+
+    size_t maxtgt=0;
+    for (const auto &f:f2t)
+      maxtgt=max(maxtgt,f.size());
+
+    while (true)
+      {
+      int fiber=-1;
+      size_t mintgt=maxtgt+1;
+      for (size_t i=0; i<f2t.size(); ++i)
+        if ((f2t[i].size()<mintgt)&&(f2t[i].size()>0))
+          { fiber=i; mintgt=f2t[i].size(); }
+      if (fiber==-1) break; // assignment done
+      int itgt = maxpri_in_fiber_closest(fiber,tgt,cobras,f2t);
       tid.push_back(itgt);
       fid.push_back(fiber);
       cleanup(tgt,raster,f2t,t2f,fiber,itgt);
@@ -444,6 +483,8 @@ unique_ptr<FiberAssigner> make_assigner(const string &name)
     return make_unique<NaiveAssigner>();
   else if (name=="draining")
     return make_unique<DrainingAssigner>();
+  else if (name=="draining_closest")
+    return make_unique<DrainingClosestAssigner>();
   else if (name=="new")
     return make_unique<NewAssigner>();
 #ifdef HAVE_ORTOOLS
