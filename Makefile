@@ -1,3 +1,5 @@
+CXX:=g++
+
 DEMO_DEP:=src/astronomy.cc src/ets_demo.cc src/ets_assigners.cc src/ets_tools.cc src/*.h src/external/*
 DEMO_SRC:=src/astronomy.cc src/ets_demo.cc src/ets_assigners.cc src/ets_tools.cc src/external/*.cc
 PYETS_DEP:=src/astronomy.cc src/pyETS.cc src/ets_assigners.cc src/ets_tools.cc src/*.h src/external/*
@@ -14,10 +16,10 @@ OR_LIB:=-L$(ORTOOLS)/lib -lortools
 endif
 
 ets_demo: $(DEMO_DEP)
-	g++ $(COMMON_FLAGS) $(OR_INC) $(DEMO_SRC) -o ets_demo $(OR_LIB)
+	$(CXX) $(COMMON_FLAGS) $(OR_INC) $(DEMO_SRC) -o ets_demo $(OR_LIB)
 
 pyETS: $(PYETS_DEP)
-	g++ $(COMMON_FLAGS) -shared -fPIC -Isrc $(OR_INC) $(PYETS_SRC) -o pyETS.so $(OR_LIB) $(PYFLAGS)
+	$(CXX) $(COMMON_FLAGS) -shared -fPIC -Isrc $(OR_INC) $(PYETS_SRC) -o pyETS.so $(OR_LIB) $(PYFLAGS)
 
 clean:
 	rm -f ./ets_demo pyETS.so
