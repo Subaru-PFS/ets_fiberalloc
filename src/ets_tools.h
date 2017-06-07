@@ -39,15 +39,16 @@
 #include "astronomy.h"
 
 /*! Simple class for storing a position in a 2D plane. */
-class vec2
+class vec2: public std::complex<double>
   {
   public:
-    double x,y;
-
     vec2() {}
-    vec2(double x_, double y_) : x(x_), y(y_) {}
+    vec2(double x_, double y_) : std::complex<double>(x_,y_) {}
+    vec2(const std::complex<double> &other) : std::complex<double>(other) {}
+    double x() const { return real(); };
+    double y() const { return imag(); };
     double dsq(const vec2 &b) const
-      { return (x-b.x)*(x-b.x) + (y-b.y)*(y-b.y); }
+      { return std::norm(*this-b); }
   };
 
 /*! Simple class containing all relevant properties of a PFS observation
@@ -102,7 +103,7 @@ class fpraster
     size_t indexy (double y) const
       { return size_t(std::max(0,std::min(int(ny)-1,int((y-y0)*idy)))); }
     size_t index (const vec2 &pos) const
-      { return indexx(pos.x) + nx*indexy(pos.y); }
+      { return indexx(pos.x()) + nx*indexy(pos.y()); }
 
   public:
     /*! Constructs an \a fpraster with \a nx_ bins in x direction and
@@ -113,12 +114,12 @@ class fpraster
       {
       planck_assert ((nx>0) && (ny>0), "bad array sizes");
       planck_assert(loc.size()>0,"input array too small");
-      x0=x1=loc[0].x;
-      y0=y1=loc[0].y;
+      x0=x1=loc[0].x();
+      y0=y1=loc[0].y();
       for (size_t i=1; i<loc.size(); ++i)
         {
-        x0=std::min(x0,loc[i].x); x1=std::max(x1,loc[i].x);
-        y0=std::min(y0,loc[i].y); y1=std::max(y1,loc[i].y);
+        x0=std::min(x0,loc[i].x()); x1=std::max(x1,loc[i].x());
+        y0=std::min(y0,loc[i].y()); y1=std::max(y1,loc[i].y());
         }
       if (x0==x1) x1+=1e-9;
       if (y0==y1) y1+=1e-9;
@@ -132,12 +133,12 @@ class fpraster
     std::vector<size_t> query(const vec2 &center, double rad) const
       {
       std::vector<size_t> res;
-      if ((center.x<x0-rad)||(center.x>x1+rad)
-        ||(center.y<y0-rad)||(center.y>y1+rad))
+      if ((center.x()<x0-rad)||(center.x()>x1+rad)
+        ||(center.y()<y0-rad)||(center.y()>y1+rad))
         return res;
       double rsq=rad*rad;
-      size_t i0=indexx(center.x-rad), i1=indexx(center.x+rad),
-            j0=indexy(center.y-rad), j1=indexy(center.y+rad);
+      size_t i0=indexx(center.x()-rad), i1=indexx(center.x()+rad),
+            j0=indexy(center.y()-rad), j1=indexy(center.y()+rad);
       for (size_t j=j0; j<=j1; ++j)
         for (size_t i=i0; i<=i1; ++i)
           for (auto k : data[i+nx*j])
@@ -146,12 +147,12 @@ class fpraster
       }
     bool anyIn (const vec2 &center, double rad) const
       {
-      if ((center.x<x0-rad)||(center.x>x1+rad)
-        ||(center.y<y0-rad)||(center.y>y1+rad))
+      if ((center.x()<x0-rad)||(center.x()>x1+rad)
+        ||(center.y()<y0-rad)||(center.y()>y1+rad))
         return false;
       double rsq=rad*rad;
-      size_t i0=indexx(center.x-rad), i1=indexx(center.x+rad),
-             j0=indexy(center.y-rad), j1=indexy(center.y+rad);
+      size_t i0=indexx(center.x()-rad), i1=indexx(center.x()+rad),
+             j0=indexy(center.y()-rad), j1=indexy(center.y()+rad);
       for (size_t j=j0; j<=j1; ++j)
         for (size_t i=i0; i<=i1; ++i)
           for (auto k : data[i+nx*j])
@@ -166,9 +167,7 @@ inline pointing radec2ptg (double ra, double dec)
 
 inline void rotate (vec2 &pos, double sa, double ca)
   {
-  vec2 t{pos};
-  pos.x = ca*t.x - sa*t.y;
-  pos.y = sa*t.x + ca*t.y;
+  pos*=std::complex<double>(ca,sa);
   }
 
 /*! Converts target coordinates from alt/az to PFI coordinates in

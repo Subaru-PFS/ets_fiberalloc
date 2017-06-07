@@ -36,27 +36,21 @@ double colldist=2;
 
 vec2 elbow_pos(const Cobra &c, const vec2 &tip)
   {
-  complex<double> pc(c.center.x,c.center.y), pt(tip.x, tip.y);
-  pt-=pc;
+  vec2 pt(tip-c.center);
   double apt=abs(pt);
-  auto rot = conj(pt)/apt;
+  auto rot = pt/apt;
   const double l1=2.375, l2=2.375; // fixed for the moment
   double x=(l2*l2-l1*l1-apt*apt)/(-2*apt);
   double y=sqrt(l1*l1-x*x);
-  auto res = complex<double>(x,y)*rot + pc;
-  return vec2(res.real(),res.imag());
+  return vec2(x,y)*rot + c.center;
   }
 
 bool line_segment_collision (const vec2 &x1, const vec2 &x2, const vec2 &y,
   double dist)
   {
-  auto p1 = complex<double>(x1.x,x1.y);
-  auto p2 = complex<double>(x2.x,x2.y);
-  auto q = complex<double>(y.x,y.y);
-  // shift p1 to origin
-  p2-=p1;
-  q-=p1;
-  p1=0.;
+  // interpret x1 as origin
+  auto p2 = x2-x1;
+  auto q = y-x1;
   double ap2=abs(p2);
   // rotate p2 to lie on positive real axis
   auto rot = conj(p2)/ap2;
@@ -88,9 +82,9 @@ void targetToPFI(vector<Target> &tgt, const pointing &los, double psi)
     vec2 pnew (atan2(dotprod(xp,x),dotprod(xp,z))*rad2degr,
                atan2(dotprod(yp,y),dotprod(yp,z))*rad2degr);
     rotate (pnew,cpsi,spsi);
-    double rsq=pnew.x*pnew.x+pnew.y*pnew.y;
-    t.pos.x= (a3*rsq*rsq+a2*rsq+a1)*pnew.x+a0;
-    t.pos.y= (-a3*rsq*rsq-a2*rsq-a1)*pnew.y+a0;
+    double rsq=norm(pnew);
+    t.pos = vec2 ((a3*rsq*rsq+a2*rsq+a1)*pnew.x()+a0,
+                  (-a3*rsq*rsq-a2*rsq-a1)*pnew.y()+a0);
     }
   }
 
@@ -105,12 +99,11 @@ vec2 id2fiberpos(int id)
   int module=id/57;
   int cobra=id-module*57;
   const double vspace=sqrt(0.75); // cos(30deg)
-  vec2 res;
-  res.y=0.5+module-0.5*cobra;
-  res.x=-vspace*(1.+2*module+(cobra&1));
+  vec2 res (-vspace*(1.+2*module+(cobra&1)),
+            0.5+module-0.5*cobra);
   if (field==1) rotate(res,-vspace,-0.5);
   if (field==2) rotate(res,vspace,-0.5);
-  res.x*=8; res.y*=8;
+  res*=8;
   return res;
   }
 
@@ -120,7 +113,7 @@ vec2 id2dotpos(int id) // id is assumed to be in [0; 2394[
   {
   const double dot_shift_y = 2.35;
   vec2 res=id2fiberpos(id);
-  res.y+=dot_shift_y;
+  res+=vec2(0.,dot_shift_y);
   return res;
   }
 
@@ -173,7 +166,9 @@ void cleanup (const vector<Target> &tgt, const vector<Cobra> &cobras,
     {
     vec2 tippos (tgt[itgt].pos),
          elbowpos(elbow_pos(cobras[fiber], tippos));
-    vector<size_t> tmp=raster.query(tgt[itgt].pos,colldist+3.); //FIXME
+    vector<size_t> tmp=raster.query(0.5*(tippos+elbowpos),colldist+2.375/2.); //FIXME
+// classical version:
+//    vector<size_t> tmp=raster.query(tippos,colldist); //FIXME
     for (auto i : tmp)
       if (line_segment_collision (elbowpos, tippos, tgt[i].pos, colldist))
         {
