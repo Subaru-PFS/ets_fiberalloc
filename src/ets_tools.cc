@@ -34,6 +34,38 @@ namespace {
 
 double colldist=2;
 
+vec2 elbow_pos(const Cobra &c, const vec2 &tip)
+  {
+  complex<double> pc(c.center.x,c.center.y), pt(tip.x, tip.y);
+  pt-=pc;
+  double apt=abs(pt);
+  auto rot = conj(pt)/apt;
+  const double l1=2.375, l2=2.375; // fixed for the moment
+  double x=(l2*l2-l1*l1-apt*apt)/(-2*apt);
+  double y=sqrt(l1*l1-x*x);
+  auto res = complex<double>(x,y)*rot + pc;
+  return vec2(res.real(),res.imag());
+  }
+
+bool line_segment_collision (const vec2 &x1, const vec2 &x2, const vec2 &y,
+  double dist)
+  {
+  auto p1 = complex<double>(x1.x,x1.y);
+  auto p2 = complex<double>(x2.x,x2.y);
+  auto q = complex<double>(y.x,y.y);
+  // shift p1 to origin
+  p2-=p1;
+  q-=p1;
+  p1=0.;
+  double ap2=abs(p2);
+  // rotate p2 to lie on positive real axis
+  auto rot = conj(p2)/ap2;
+  q*=rot;
+  if (q.real()<=0) return norm(q)<=dist*dist;
+  if (q.real()>=ap2) return norm(q-ap2)<=dist*dist;
+  return abs(q.imag())<=dist;
+  }
+
 } // unnamed namespace
 
 void setCollisionDistance(double dist)
@@ -126,9 +158,9 @@ void calcMappings (const vector<Target> &tgt, const vector<Cobra> &cobras,
  // for (auto &v: t2f) sort(v.begin(), v.end());
   }
 
-void cleanup (const vector<Target> &tgt, const fpraster &raster,
-  vector<vector<size_t>> &f2t, vector<vector<size_t>> &t2f,
-  int fiber, int itgt)
+void cleanup (const vector<Target> &tgt, const vector<Cobra> &cobras,
+  const fpraster &raster, vector<vector<size_t>> &f2t,
+  vector<vector<size_t>> &t2f, int fiber, int itgt)
   {
   // remove everything related to the selected fiber
   for (auto curtgt : f2t[fiber]) stripout(t2f[curtgt],fiber);
@@ -136,15 +168,18 @@ void cleanup (const vector<Target> &tgt, const fpraster &raster,
   // remove target
   for (auto j : t2f[itgt]) stripout(f2t[j],itgt);
   t2f[itgt].clear();
-  // remove everything in blocking area
+  // remove everything in "lower arm" area of the assigned cobra
   if (colldist>0.)
     {
-    vector<size_t> tmp=raster.query(tgt[itgt].pos,colldist);
+    vec2 tippos (tgt[itgt].pos),
+         elbowpos(elbow_pos(cobras[fiber], tippos));
+    vector<size_t> tmp=raster.query(tgt[itgt].pos,colldist+3.); //FIXME
     for (auto i : tmp)
-      {
-      for (auto j : t2f[i]) stripout(f2t[j],i);
-      t2f[i].clear();
-      }
+      if (line_segment_collision (elbowpos, tippos, tgt[i].pos, colldist))
+        {
+        for (auto j : t2f[i]) stripout(f2t[j],i);
+        t2f[i].clear();
+        }
     }
 //  checkMappings(tgt,f2t,t2f);
   }

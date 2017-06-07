@@ -50,26 +50,6 @@ class vec2
       { return (x-b.x)*(x-b.x) + (y-b.y)*(y-b.y); }
   };
 
-inline bool line_segment_collision (const vec2 &x1, const vec2 &x2, const vec2 &y,
-  double dist)
-  {
-  using namespace std;
-  auto p1 = complex<double>(x1.x,x1.y);
-  auto p2 = complex<double>(x2.x,x2.y);
-  auto q = complex<double>(y.x,y.y);
-  // shift p1 to origin
-  p2-=p1;
-  q-=p1;
-  p1=0.;
-  double ap2=abs(p2);
-  // rotate p2 to lie on positive real axis
-  auto rot = conj(p2)/ap2;
-  q*=rot;
-  if (q.real()<=0) return norm(q)<=dist*dist;
-  if (q.real()>=ap2) return norm(q-ap2)<=dist*dist;
-  return abs(q.imag())<=dist;
-  }
-
 /*! Simple class containing all relevant properties of a PFS observation
     target. */
 class Target
@@ -98,20 +78,6 @@ class Cobra
   };
 
 std::vector<Cobra> makeCobras();
-
-inline vec2 elbow_pos(const Cobra &c, const vec2 &tip)
-  {
-  using namespace std;
-  complex<double> pc(c.center.x,c.center.y), pt(tip.x, tip.y);
-  pt-=pc;
-  double apt=abs(pt);
-  auto rot = conj(pt)/apt;
-  const double l1=2.375, l2=2.375; // fixed for the moment
-  double x=(l2*l2-l1*l1-apt*apt)/(-2*apt);
-  double y=sqrt(l1*l1-x*x);
-  auto res = complex<double>(x,y)*rot + pc;
-  return vec2(res.real(),res.imag());
-  }
 
 void setCollisionDistance(double dist);
 
@@ -250,7 +216,8 @@ void calcMappings (const std::vector<Target> &tgt,
     target, remove all references to \a itgt from the mappings and also remove
     all targets that lie in the blocking area around \a itgt and all targets
     exclusively visible from \a fiber. */
-void cleanup (const std::vector<Target> &tgt, const fpraster &raster,
+void cleanup (const std::vector<Target> &tgt, const std::vector<Cobra> &cobras,
+  const fpraster &raster,
   std::vector<std::vector<size_t>> &f2t, std::vector<std::vector<size_t>> &t2f,
   int fiber, int itgt);
 

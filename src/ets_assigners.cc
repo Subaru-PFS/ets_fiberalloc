@@ -287,7 +287,7 @@ class NaiveAssigner: public FiberAssigner
       int itgt = maxpri_in_fiber(fiber,tgt,f2t);
       tid.push_back(itgt);
       fid.push_back(fiber);
-      cleanup (tgt, raster, f2t, t2f, fiber, itgt);
+      cleanup (tgt, cobras, raster, f2t, t2f, fiber, itgt);
       }
     }
   };
@@ -321,7 +321,7 @@ class DrainingAssigner: public FiberAssigner
       int itgt = maxpri_in_fiber(fiber,tgt,f2t);
       tid.push_back(itgt);
       fid.push_back(fiber);
-      cleanup(tgt,raster,f2t,t2f,fiber,itgt);
+      cleanup(tgt,cobras,raster,f2t,t2f,fiber,itgt);
       }
     }
   };
@@ -357,7 +357,7 @@ class DrainingClosestAssigner: public FiberAssigner
       int itgt = maxpri_in_fiber_closest(fiber,tgt,cobras,f2t);
       tid.push_back(itgt);
       fid.push_back(fiber);
-      cleanup(tgt,raster,f2t,t2f,fiber,itgt);
+      cleanup(tgt,cobras,raster,f2t,t2f,fiber,itgt);
       }
     }
   };
@@ -391,7 +391,7 @@ class NewAssigner: public FiberAssigner
       int fiber=t2f[itgt][ifib];
       tid.push_back(itgt);
       fid.push_back(fiber);
-      cleanup(tgt,raster,f2t,t2f,fiber,itgt);
+      cleanup(tgt,cobras,raster,f2t,t2f,fiber,itgt);
       fix_priority(tgt,t2f,raster,itgt,pri);
       }
     }
