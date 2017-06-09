@@ -41,7 +41,7 @@ vec2 elbow_pos(const Cobra &c, const vec2 &tip)
   auto rot = pt/apt;
   const double l1=2.375, l2=2.375; // fixed for the moment
   double x=(l2*l2-l1*l1-apt*apt)/(-2*apt);
-  double y=sqrt(l1*l1-x*x);
+  double y=-sqrt(l1*l1-x*x);
   return vec2(x,y)*rot + c.center;
   }
 
