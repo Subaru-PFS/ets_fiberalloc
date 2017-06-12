@@ -30,41 +30,6 @@
 
 using namespace std;
 
-namespace {
-
-double colldist=2;
-
-vec2 elbow_pos(const Cobra &c, const vec2 &tip)
-  {
-  vec2 pt(tip-c.center);
-  double apt=abs(pt);
-  auto rot = pt/apt;
-  const double l1=2.375, l2=2.375; // fixed for the moment
-  double x=(l2*l2-l1*l1-apt*apt)/(-2*apt);
-  double y=-sqrt(l1*l1-x*x);
-  return vec2(x,y)*rot + c.center;
-  }
-
-bool line_segment_collision (const vec2 &x1, const vec2 &x2, const vec2 &y,
-  double dist)
-  {
-  // interpret x1 as origin
-  auto p2 = x2-x1;
-  auto q = y-x1;
-  double ap2=abs(p2);
-  // rotate p2 to lie on positive real axis
-  auto rot = conj(p2)/ap2;
-  q*=rot;
-  if (q.real()<=0) return norm(q)<=dist*dist;
-  if (q.real()>=ap2) return norm(q-ap2)<=dist*dist;
-  return abs(q.imag())<=dist;
-  }
-
-} // unnamed namespace
-
-void setCollisionDistance(double dist)
-  {colldist=dist; }
-
 void targetToPFI(vector<Target> &tgt, const pointing &los, double psi)
   {
   // altitude and azimuth of North celestial pole:
@@ -128,55 +93,6 @@ vector<Cobra> makeCobras()
   for (size_t i=0; i<nfiber; ++i)
     res.emplace_back(id2fiberpos(i),rmax,id2dotpos(i),dotdist);
   return res;
-  }
-
-void calcMappings (const vector<Target> &tgt, const vector<Cobra> &cobras,
-  const fpraster &raster,
-  vector<vector<size_t>> &f2t, vector<vector<size_t>> &t2f)
-  {
-  f2t=vector<vector<size_t>>(cobras.size());
-  for (size_t i=0; i<cobras.size(); ++i)
-    {
-    const auto &c(cobras[i]);
-    vector<size_t> tmp=raster.query(c.center,c.rmax);
-    for (auto j : tmp)
-      if (c.dotpos.dsq(tgt[j].pos)>=c.rdot*c.rdot) f2t[i].push_back(j);
-    }
-  t2f=vector<vector<size_t>>(tgt.size());
-  for (size_t i=0; i<f2t.size(); ++i)
-    for (auto t : f2t[i])
-      t2f[t].push_back(i);
-
- // for (auto &v: f2t) sort(v.begin(), v.end());
- // for (auto &v: t2f) sort(v.begin(), v.end());
-  }
-
-void cleanup (const vector<Target> &tgt, const vector<Cobra> &cobras,
-  const fpraster &raster, vector<vector<size_t>> &f2t,
-  vector<vector<size_t>> &t2f, int fiber, int itgt)
-  {
-  // remove everything related to the selected fiber
-  for (auto curtgt : f2t[fiber]) stripout(t2f[curtgt],fiber);
-  f2t[fiber].clear();
-  // remove target
-  for (auto j : t2f[itgt]) stripout(f2t[j],itgt);
-  t2f[itgt].clear();
-  // remove everything in "lower arm" area of the assigned cobra
-  if (colldist>0.)
-    {
-    vec2 tippos (tgt[itgt].pos),
-         elbowpos(elbow_pos(cobras[fiber], tippos));
-    vector<size_t> tmp=raster.query(0.5*(tippos+elbowpos),colldist+2.375/2.); //FIXME
-// classical version:
-//    vector<size_t> tmp=raster.query(tippos,colldist); //FIXME
-    for (auto i : tmp)
-      if (line_segment_collision (elbowpos, tippos, tgt[i].pos, colldist))
-        {
-        for (auto j : t2f[i]) stripout(f2t[j],i);
-        t2f[i].clear();
-        }
-    }
-//  checkMappings(tgt,f2t,t2f);
   }
 
 fpraster tgt2raster (const vector<Target> &tgt, int nx, int ny)

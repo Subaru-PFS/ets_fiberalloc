@@ -80,8 +80,6 @@ class Cobra
 
 std::vector<Cobra> makeCobras();
 
-void setCollisionDistance(double dist);
-
 constexpr double r_kernel=4.75; // radius of the priority function kernel
 // Latitude and longitude of the obseratory (radian)
 const double obs_lat=(19+49/60.+32/3600.)*degr2rad,
@@ -253,20 +251,6 @@ void checkMappings (const vector<Target> &tgt,
     }
   }
 #endif
-
-/*! Computes the fiber->target and target->fiber mappings. */
-void calcMappings (const std::vector<Target> &tgt,
-  const std::vector<Cobra> &cobras, const fpraster &raster,
-  std::vector<std::vector<size_t>> &f2t, std::vector<std::vector<size_t>> &t2f);
-
-/*! Given a target index \a itgt and a fiber index \a fiber observing this
-    target, remove all references to \a itgt from the mappings and also remove
-    all targets that lie in the blocking area around \a itgt and all targets
-    exclusively visible from \a fiber. */
-void cleanup (const std::vector<Target> &tgt, const std::vector<Cobra> &cobras,
-  const fpraster &raster,
-  std::vector<std::vector<size_t>> &f2t, std::vector<std::vector<size_t>> &t2f,
-  int fiber, int itgt);
 
 inline double kernelfunc(double rsq)
   {

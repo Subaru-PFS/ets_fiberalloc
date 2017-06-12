@@ -35,6 +35,34 @@ namespace {
 
 constexpr int randseed=42;
 
+double colldist=2;
+
+vec2 elbow_pos(const Cobra &c, const vec2 &tip)
+  {
+  vec2 pt(tip-c.center);
+  double apt=abs(pt);
+  auto rot = pt/apt;
+  const double l1=2.375, l2=2.375; // fixed for the moment
+  double x=(l2*l2-l1*l1-apt*apt)/(-2*apt);
+  double y=-sqrt(l1*l1-x*x);
+  return vec2(x,y)*rot + c.center;
+  }
+
+bool line_segment_collision (const vec2 &x1, const vec2 &x2, const vec2 &y,
+  double dist)
+  {
+  // interpret x1 as origin
+  auto p2 = x2-x1;
+  auto q = y-x1;
+  double ap2=abs(p2);
+  // rotate p2 to lie on positive real axis
+  auto rot = conj(p2)/ap2;
+  q*=rot;
+  if (q.real()<=0) return norm(q)<=dist*dist;
+  if (q.real()>=ap2) return norm(q-ap2)<=dist*dist;
+  return abs(q.imag())<=dist;
+  }
+
 /*! Priority queue that allows changing the priority of its entries after
     its creation
     Originally developed for Gadget 4. */
@@ -166,103 +194,10 @@ struct pq_entry
     }
   };
 
-pqueue<pq_entry> calc_pri(const std::vector<Target> &tgt,
-  const std::vector<std::vector<size_t>> &t2f, const fpraster &raster)
-  {
-  std::vector<pq_entry> pri(tgt.size());
-  for (size_t i=0; i<tgt.size(); ++i)
-    {
-    if (t2f[i].size()>0)
-      {
-      std::vector<size_t> ngb = raster.query(tgt[i].pos,r_kernel);
-
-      for (auto j : ngb)
-        {
-        if (i==j)
-          pri[i].prox+=tgt[i].time*tgt[i].time*kernelfunc(0.);
-        if (i<j)
-          {
-          double tmp=tgt[i].time*tgt[j].time
-                    *kernelfunc(tgt[i].pos.dsq(tgt[j].pos));
-          pri[i].prox+=tmp;
-          pri[j].prox+=tmp;
-          }
-        }
-      }
-    }
-  for (size_t i=0; i<tgt.size(); ++i)
-    pri[i].pri=tgt[i].pri;
-  pqueue<pq_entry> res(pri);
-  return res;
-  }
-
-void fix_priority(const std::vector<Target> &tgt,
-  const std::vector<std::vector<size_t>> &t2f,
-  const fpraster &raster, size_t itgt, pqueue<pq_entry> &pri)
-  {
-  std::vector<size_t> ngb = raster.query(tgt[itgt].pos,r_kernel);
-  for (auto j : ngb)
-    if ((!t2f[j].empty())||(pri.priority(j).prox!=0.))
-      {
-      pq_entry tpri=pri.priority(j);
-      tpri.prox-=tgt[j].time*tgt[itgt].time
-                *kernelfunc(tgt[itgt].pos.dsq(tgt[j].pos));
-      pri.set_priority(tpri,j);
-      }
-  }
-
-
-int maxpri_in_fiber (size_t fiber, const std::vector<Target> &tgt,
-  const std::vector<std::vector<size_t>> &f2t)
-  {
-  using namespace std;
-  static std::mt19937 engine{randseed};
-
-  planck_assert(!f2t[fiber].empty(), "searching in empty fiber");
-  vector<size_t> tmp;
-  int maxpri = tgt[f2t[fiber][0]].pri;
-  tmp.push_back(0);
-  for (size_t j=1; j<f2t[fiber].size(); ++j)
-    {
-    if (tgt[f2t[fiber][j]].pri==maxpri)
-      tmp.push_back(j);
-    else if (tgt[f2t[fiber][j]].pri<maxpri)
-      {
-      maxpri=tgt[f2t[fiber][j]].pri;
-      tmp.clear();
-      tmp.push_back(j);
-      }
-    }
-  std::uniform_int_distribution<size_t> dist(0, tmp.size() - 1);
-  return f2t[fiber][tmp[dist(engine)]];
-  }
-
-int maxpri_in_fiber_closest (size_t fiber, const std::vector<Target> &tgt,
-  const std::vector<Cobra> &cobras, const std::vector<std::vector<size_t>> &f2t)
-  {
-  using namespace std;
-  vec2 fpos=cobras[fiber].center;
-  int maxpri = tgt[f2t[fiber][0]].pri;
-  double mindsq=fpos.dsq(tgt[f2t[fiber][0]].pos);
-  size_t idx=0;
-  for (size_t j=1; j<f2t[fiber].size(); ++j)
-    {
-    if (tgt[f2t[fiber][j]].pri==maxpri)
-      {
-      if (fpos.dsq(tgt[f2t[fiber][j]].pos)<mindsq)
-        { idx=j; mindsq=fpos.dsq(tgt[f2t[fiber][j]].pos); }
-      }
-    else if (tgt[f2t[fiber][j]].pri<maxpri)
-      {
-      maxpri=tgt[f2t[fiber][j]].pri;
-      idx=j;
-      mindsq=fpos.dsq(tgt[f2t[fiber][j]].pos);
-      }
-    }
-  return f2t[fiber][idx];
-  }
-
 } // unnamed namespace
+
+void setCollisionDistance(double dist)
+  {colldist=dist; }
 
     /*! Assign target from \a tgt to fibers according to a given strategy.
         On return, \a tid and \a fid contain target resp. fiber IDs for the
@@ -278,6 +213,105 @@ class FiberAssigner
 
     fpraster raster;
     vector<vector<size_t>> f2t,t2f;
+
+    /*! Computes the fiber->target and target->fiber mappings. */
+    void calcMappings ()
+      {
+      f2t=vector<vector<size_t>>(cobras.size());
+      for (size_t i=0; i<cobras.size(); ++i)
+        {
+        const auto &c(cobras[i]);
+        vector<size_t> tmp=raster.query(c.center,c.rmax);
+        for (auto j : tmp)
+          if (c.dotpos.dsq(tgt[j].pos)>=c.rdot*c.rdot) f2t[i].push_back(j);
+        }
+      t2f=vector<vector<size_t>>(tgt.size());
+      for (size_t i=0; i<f2t.size(); ++i)
+        for (auto t : f2t[i])
+          t2f[t].push_back(i);
+
+     // for (auto &v: f2t) sort(v.begin(), v.end());
+     // for (auto &v: t2f) sort(v.begin(), v.end());
+      }
+
+    int maxpri_in_fiber (size_t fiber) const
+      {
+      using namespace std;
+      static std::mt19937 engine{randseed};
+
+      planck_assert(!f2t[fiber].empty(), "searching in empty fiber");
+      vector<size_t> tmp;
+      int maxpri = tgt[f2t[fiber][0]].pri;
+      tmp.push_back(0);
+      for (size_t j=1; j<f2t[fiber].size(); ++j)
+        {
+        if (tgt[f2t[fiber][j]].pri==maxpri)
+          tmp.push_back(j);
+        else if (tgt[f2t[fiber][j]].pri<maxpri)
+          {
+          maxpri=tgt[f2t[fiber][j]].pri;
+          tmp.clear();
+          tmp.push_back(j);
+          }
+        }
+      std::uniform_int_distribution<size_t> dist(0, tmp.size() - 1);
+      return f2t[fiber][tmp[dist(engine)]];
+      }
+
+    int maxpri_in_fiber_closest (size_t fiber) const
+      {
+      using namespace std;
+      vec2 fpos=cobras[fiber].center;
+      int maxpri = tgt[f2t[fiber][0]].pri;
+      double mindsq=fpos.dsq(tgt[f2t[fiber][0]].pos);
+      size_t idx=0;
+      for (size_t j=1; j<f2t[fiber].size(); ++j)
+        {
+        if (tgt[f2t[fiber][j]].pri==maxpri)
+          {
+          if (fpos.dsq(tgt[f2t[fiber][j]].pos)<mindsq)
+            { idx=j; mindsq=fpos.dsq(tgt[f2t[fiber][j]].pos); }
+          }
+        else if (tgt[f2t[fiber][j]].pri<maxpri)
+          {
+          maxpri=tgt[f2t[fiber][j]].pri;
+          idx=j;
+          mindsq=fpos.dsq(tgt[f2t[fiber][j]].pos);
+          }
+        }
+      return f2t[fiber][idx];
+      }
+
+/*! Given a target index \a itgt and a fiber index \a fiber observing this
+    target, remove all references to \a itgt from the mappings and also remove
+    all targets that lie in the blocking area around \a itgt and all targets
+    exclusively visible from \a fiber. */
+    void cleanup (int fiber, int itgt)
+      {
+      // remove everything related to the selected fiber
+      for (auto curtgt : f2t[fiber]) stripout(t2f[curtgt],fiber);
+      f2t[fiber].clear();
+      // remove target
+      for (auto j : t2f[itgt]) stripout(f2t[j],itgt);
+      t2f[itgt].clear();
+      // remove everything in "lower arm" area of the assigned cobra
+      if (colldist>0.)
+        {
+        vec2 tippos (tgt[itgt].pos),
+             elbowpos(elbow_pos(cobras[fiber], tippos));
+        vector<size_t> tmp=raster.query(0.5*(tippos+elbowpos),colldist+2.375/2.); //FIXME
+    // classical version:
+    //    vector<size_t> tmp=raster.query(tippos,colldist); //FIXME
+        for (auto i : tmp)
+          if (line_segment_collision (elbowpos, tippos, tgt[i].pos, colldist))
+            {
+            for (auto j : t2f[i]) stripout(f2t[j],i);
+            t2f[i].clear();
+            }
+        }
+    //  checkMappings(tgt,f2t,t2f);
+      }
+
   public:
     FiberAssigner(const vector<Target> &tgt_, const std::vector<Cobra> &cobras_,
     vector<size_t> &tid_, vector<size_t> &fid_)
@@ -285,7 +319,7 @@ class FiberAssigner
         raster(tgt2raster(tgt,100,100))
       {
       tid.clear(); fid.clear();
-      calcMappings(tgt,cobras,raster,f2t,t2f);
+      calcMappings();
       }
   };
 
@@ -302,11 +336,11 @@ class NaiveAssigner: public FiberAssigner
     for (size_t fiber=0; fiber<f2t.size(); ++fiber)
       {
       if (f2t[fiber].empty()) continue;
-      int itgt = maxpri_in_fiber(fiber,tgt,f2t);
+      int itgt = maxpri_in_fiber(fiber);
  //     try_to_assign(itgt, fiber, f2t, t2f, tgt, cobras, tid, fid, larms);
       tid.push_back(itgt);
       fid.push_back(fiber);
-      cleanup (tgt, cobras, raster, f2t, t2f, fiber, itgt);
+      cleanup (fiber, itgt);
       }
     }
   };
@@ -334,10 +368,10 @@ class DrainingAssigner: public FiberAssigner
         if ((f2t[i].size()<mintgt)&&(f2t[i].size()>0))
           { fiber=i; mintgt=f2t[i].size(); }
       if (fiber==-1) break; // assignment done
-      int itgt = maxpri_in_fiber(fiber,tgt,f2t);
+      int itgt = maxpri_in_fiber(fiber);
       tid.push_back(itgt);
       fid.push_back(fiber);
-      cleanup(tgt,cobras,raster,f2t,t2f,fiber,itgt);
+      cleanup(fiber,itgt);
       }
     }
   };
@@ -367,10 +401,10 @@ class DrainingClosestAssigner: public FiberAssigner
         if ((f2t[i].size()<mintgt)&&(f2t[i].size()>0))
           { fiber=i; mintgt=f2t[i].size(); }
       if (fiber==-1) break; // assignment done
-      int itgt = maxpri_in_fiber_closest(fiber,tgt,cobras,f2t);
+      int itgt = maxpri_in_fiber_closest(fiber);
       tid.push_back(itgt);
       fid.push_back(fiber);
-      cleanup(tgt,cobras,raster,f2t,t2f,fiber,itgt);
+      cleanup(fiber,itgt);
       }
     }
   };
@@ -382,12 +416,55 @@ class DrainingClosestAssigner: public FiberAssigner
       After each assignment, update the priority of the remaining targets. */
 class NewAssigner: public FiberAssigner
   {
+  private:
+    pqueue<pq_entry> calc_pri() const
+      {
+      std::vector<pq_entry> pri(tgt.size());
+      for (size_t i=0; i<tgt.size(); ++i)
+        {
+        if (t2f[i].size()>0)
+          {
+          std::vector<size_t> ngb = raster.query(tgt[i].pos,r_kernel);
+
+          for (auto j : ngb)
+            {
+            if (i==j)
+              pri[i].prox+=tgt[i].time*tgt[i].time*kernelfunc(0.);
+            if (i<j)
+              {
+              double tmp=tgt[i].time*tgt[j].time
+                        *kernelfunc(tgt[i].pos.dsq(tgt[j].pos));
+              pri[i].prox+=tmp;
+              pri[j].prox+=tmp;
+              }
+            }
+          }
+        }
+      for (size_t i=0; i<tgt.size(); ++i)
+        pri[i].pri=tgt[i].pri;
+      pqueue<pq_entry> res(pri);
+      return res;
+      }
+
+    void fix_priority(size_t itgt, pqueue<pq_entry> &pri)
+      {
+      std::vector<size_t> ngb = raster.query(tgt[itgt].pos,r_kernel);
+      for (auto j : ngb)
+        if ((!t2f[j].empty())||(pri.priority(j).prox!=0.))
+          {
+          pq_entry tpri=pri.priority(j);
+          tpri.prox-=tgt[j].time*tgt[itgt].time
+                    *kernelfunc(tgt[itgt].pos.dsq(tgt[j].pos));
+          pri.set_priority(tpri,j);
+          }
+      }
+
   public:
   NewAssigner (const vector<Target> &tgt_, const std::vector<Cobra> &cobras_,
     vector<size_t> &tid_, vector<size_t> &fid_)
     : FiberAssigner(tgt_, cobras_, tid_, fid_)
     {
-    pqueue<pq_entry> pri=calc_pri(tgt,t2f,raster);
+    pqueue<pq_entry> pri=calc_pri();
 
     while (true)
       {
@@ -402,8 +479,8 @@ class NewAssigner: public FiberAssigner
       int fiber=t2f[itgt][ifib];
       tid.push_back(itgt);
       fid.push_back(fiber);
-      cleanup(tgt,cobras,raster,f2t,t2f,fiber,itgt);
-      fix_priority(tgt,t2f,raster,itgt,pri);
+      cleanup(fiber,itgt);
+      fix_priority(itgt,pri);
       }
     }
   };

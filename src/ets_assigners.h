@@ -33,6 +33,8 @@
 #include <memory>
 #include "ets_tools.h"
 
+void setCollisionDistance(double dist);
+
 void ets_assign (const std::string &name, const std::vector<Target> &tgt,
       const std::vector<Cobra> &cobras,
       std::vector<size_t> &tid, std::vector<size_t> &fid);
