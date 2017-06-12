@@ -27,10 +27,6 @@
  */
 
 #include <random>
-
-#ifdef HAVE_ORTOOLS
-#include "graph/min_cost_flow.h"
-#endif
 #include "ets_assigners.h"
 
 using namespace std;
@@ -268,38 +264,46 @@ int maxpri_in_fiber_closest (size_t fiber, const std::vector<Target> &tgt,
 
 } // unnamed namespace
 
-class FiberAssigner
-  {
-  public:
     /*! Assign target from \a tgt to fibers according to a given strategy.
         On return, \a tid and \a fid contain target resp. fiber IDs for the
         assigned targets. Target IDs range from 0 to \a tgt.size()-1, fiber
         IDs from 0 to 2393. */
-    virtual void assign (const std::vector<Target> &tgt,
-      const std::vector<Cobra> &cobras,
-      std::vector<size_t> &tid, std::vector<size_t> &fid) const = 0;
+class FiberAssigner
+  {
+  protected:
+    const vector<Target> &tgt;
+    const vector<Cobra> &cobras;
+    vector<size_t> &tid;
+    vector<size_t> &fid;
 
-    virtual ~FiberAssigner() {}
+    fpraster raster;
+    vector<vector<size_t>> f2t,t2f;
+  public:
+    FiberAssigner(const vector<Target> &tgt_, const std::vector<Cobra> &cobras_,
+    vector<size_t> &tid_, vector<size_t> &fid_)
+      : tgt(tgt_), cobras(cobras_), tid(tid_), fid(fid_),
+        raster(tgt2raster(tgt,100,100))
+      {
+      tid.clear(); fid.clear();
+      calcMappings(tgt,cobras,raster,f2t,t2f);
+      }
   };
 
+/*! Naive assignment algorithm: iterate over all fibers, and if a fiber has
+    targets in its patrol area, assign the target with the highest priority
+    to it. */
 class NaiveAssigner: public FiberAssigner
   {
-  /*! Naive assignment algorithm: iterate over all fibers, and if a fiber has
-      targets in its patrol area, assign the target with the highest priority
-      to it. */
-  virtual void assign (const vector<Target> &tgt, const std::vector<Cobra> &cobras,
-    vector<size_t> &tid, vector<size_t> &fid) const
+  public:
+  NaiveAssigner (const vector<Target> &tgt_, const std::vector<Cobra> &cobras_,
+    vector<size_t> &tid_, vector<size_t> &fid_)
+    : FiberAssigner(tgt_, cobras_, tid_, fid_)
     {
-    tid.clear(); fid.clear();
-    fpraster raster=tgt2raster(tgt,100,100);
-    vector<vector<size_t>> f2t,t2f;
-    calcMappings(tgt,cobras,raster,f2t,t2f);
-
     for (size_t fiber=0; fiber<f2t.size(); ++fiber)
       {
       if (f2t[fiber].empty()) continue;
       int itgt = maxpri_in_fiber(fiber,tgt,f2t);
-      try_to_assign(itgt, fiber, f2t, t2f, tgt, cobras, tid, fid, larms);
+ //     try_to_assign(itgt, fiber, f2t, t2f, tgt, cobras, tid, fid, larms);
       tid.push_back(itgt);
       fid.push_back(fiber);
       cleanup (tgt, cobras, raster, f2t, t2f, fiber, itgt);
@@ -307,20 +311,17 @@ class NaiveAssigner: public FiberAssigner
     }
   };
 
-class DrainingAssigner: public FiberAssigner
-  {
   /*! Assignment strategy modeled after Morales et al. 2012: MNRAS 419, 1187
       find the fiber(s) with the smallest number of observable targets >0;
       for the first of the returned fibers, assign the target with highest
       priority to it; repeat until no more targets are observable. */
-  virtual void assign (const vector<Target> &tgt, const std::vector<Cobra> &cobras,
-    vector<size_t> &tid, vector<size_t> &fid) const
+class DrainingAssigner: public FiberAssigner
+  {
+  public:
+  DrainingAssigner (const vector<Target> &tgt_, const std::vector<Cobra> &cobras_,
+    vector<size_t> &tid_, vector<size_t> &fid_)
+    : FiberAssigner(tgt_, cobras_, tid_, fid_)
     {
-    tid.clear(); fid.clear();
-    fpraster raster=tgt2raster(tgt,100,100);
-    vector<vector<size_t>> f2t,t2f;
-    calcMappings(tgt,cobras,raster,f2t,t2f);
-
     size_t maxtgt=0;
     for (const auto &f:f2t)
       maxtgt=max(maxtgt,f.size());
@@ -341,22 +342,19 @@ class DrainingAssigner: public FiberAssigner
     }
   };
 
-class DrainingClosestAssigner: public FiberAssigner
-  {
   /*! Assignment strategy modeled after Morales et al. 2012: MNRAS 419, 1187
       find the fiber(s) with the smallest number of observable targets >0;
       for the first of the returned fibers, assign the target with highest
       priority to it; if there is more than one of those, choose the one closest
       to the center of the patrol area;
       repeat until no more targets are observable. */
-  virtual void assign (const vector<Target> &tgt, const std::vector<Cobra> &cobras,
-    vector<size_t> &tid, vector<size_t> &fid) const
+class DrainingClosestAssigner: public FiberAssigner
+  {
+  public:
+  DrainingClosestAssigner (const vector<Target> &tgt_, const std::vector<Cobra> &cobras_,
+    vector<size_t> &tid_, vector<size_t> &fid_)
+    : FiberAssigner(tgt_, cobras_, tid_, fid_)
     {
-    tid.clear(); fid.clear();
-    fpraster raster=tgt2raster(tgt,100,100);
-    vector<vector<size_t>> f2t,t2f;
-    calcMappings(tgt,cobras,raster,f2t,t2f);
-
     size_t maxtgt=0;
     for (const auto &f:f2t)
       maxtgt=max(maxtgt,f.size());
@@ -377,20 +375,18 @@ class DrainingClosestAssigner: public FiberAssigner
     }
   };
 
-class NewAssigner: public FiberAssigner
-  {
   /*! Assignment strategy with the goal of reducing inhomogeneity in the
       target distribution: assign a priority to each target that depends on
       the distance of all other targets in its close vicinity; process targets
       in order of decreasing priority and assign them to fibers, if possible.
       After each assignment, update the priority of the remaining targets. */
-  virtual void assign (const vector<Target> &tgt, const std::vector<Cobra> &cobras,
-    vector<size_t> &tid, vector<size_t> &fid) const
+class NewAssigner: public FiberAssigner
+  {
+  public:
+  NewAssigner (const vector<Target> &tgt_, const std::vector<Cobra> &cobras_,
+    vector<size_t> &tid_, vector<size_t> &fid_)
+    : FiberAssigner(tgt_, cobras_, tid_, fid_)
     {
-    tid.clear(); fid.clear();
-    fpraster raster=tgt2raster(tgt,100,100);
-    vector<vector<size_t>> f2t,t2f;
-    calcMappings(tgt,cobras,raster,f2t,t2f);
     pqueue<pq_entry> pri=calc_pri(tgt,t2f,raster);
 
     while (true)
@@ -412,108 +408,18 @@ class NewAssigner: public FiberAssigner
     }
   };
 
-#ifdef HAVE_ORTOOLS
-class NetworkAssigner: public FiberAssigner
-  {
-  /*! Assignment using min-cost network flow algorithm. Currently, collisions
-      are ignored. Priorities are ignored as well.
-      Performance of the algorithm lies between naive and draining assigner */
-  virtual void assign (const vector<Target> &tgt,
-    vector<size_t> &tid, vector<size_t> &fid) const
-    {
-    using namespace operations_research;
-    tid.clear(); fid.clear();
-    vector<size_t> head,tail,xarc;
-    fpraster raster=tgt2raster(tgt,100,100);
-    vector<vector<size_t>> f2t,t2f;
-    calcMappings(tgt,raster,f2t,t2f);
-    size_t nfibers=f2t.size();
-    size_t ntgt=t2f.size();
-    size_t nnodes=nfibers+ntgt+2;
-    size_t narcs=0;
-    for (auto x: f2t) narcs+=x.size();
-    narcs+=nfibers+ntgt+1;
-    StarGraph graph(nnodes, narcs);
-    MinCostFlow min_cost_flow(&graph);
-    // Source node is 0;
-    // fiber nodes are [1; nfibers];
-    // target nodes are [nfibers+1; nfibers+ntgt];
-    // sink node is nfibers+ntgt+1.
-
-    // Arcs from source to fibers
-    for (size_t i=0; i<nfibers; ++i)
-      {
-      ArcIndex arc = graph.AddArc(0, 1+i);
-      min_cost_flow.SetArcUnitCost(arc, 1);
-      min_cost_flow.SetArcCapacity(arc, 1);
-      }
-    // Arcs between fibers and targets
-    for (size_t i=0; i<nfibers; ++i)
-      for (size_t j=0; j<f2t[i].size(); ++j)
-        {
-        size_t arc=graph.AddArc(1+i, 1+nfibers+f2t[i][j]);
-        xarc.push_back(arc);
-        head.push_back(i); tail.push_back(f2t[i][j]);
-        min_cost_flow.SetArcUnitCost(arc, 1);
-        min_cost_flow.SetArcCapacity(arc, 1);
-        }
-    // Arcs from targets to sink
-    for (size_t i=0; i<ntgt; ++i)
-      {
-      ArcIndex arc = graph.AddArc(1+nfibers+i, 1+nfibers+ntgt);
-      min_cost_flow.SetArcUnitCost(arc, 1);
-      min_cost_flow.SetArcCapacity(arc, 1);
-      }
-    // overflow arc
-    {
-    ArcIndex arc = graph.AddArc(0, 1+nfibers+ntgt);
-    min_cost_flow.SetArcUnitCost(arc, 1000000);
-    min_cost_flow.SetArcCapacity(arc, 1000000);
-    }
-    // source node
-    min_cost_flow.SetNodeSupply(0, nfibers);
-    // passive nodes
-    for (size_t i=0; i<nfibers+ntgt; ++i)
-      min_cost_flow.SetNodeSupply(i+1,0);
-    // sink node
-    min_cost_flow.SetNodeSupply(1+nfibers+ntgt,-nfibers);
-    CHECK(min_cost_flow.Solve());
-    CHECK_EQ(MinCostFlow::OPTIMAL, min_cost_flow.status());
-    // Extract the solution
-    for (size_t i=0; i<xarc.size(); ++i)
-      if (min_cost_flow.Flow(xarc[i])>0)
-        {
-        fid.push_back(head[i]);
-        tid.push_back(tail[i]);
-        }
-    CostValue total_flow_cost = min_cost_flow.GetOptimalCost();
-    }
-  };
-
-#endif
-
-unique_ptr<FiberAssigner> make_assigner(const string &name)
-  {
-  if (name=="naive")
-    return make_unique<NaiveAssigner>();
-  else if (name=="draining")
-    return make_unique<DrainingAssigner>();
-  else if (name=="draining_closest")
-    return make_unique<DrainingClosestAssigner>();
-  else if (name=="new")
-    return make_unique<NewAssigner>();
-#ifdef HAVE_ORTOOLS
-  else if (name=="network")
-    return make_unique<NetworkAssigner>();
-#endif
-  else
-    planck_fail("unknown assigner");
-  }
-
-void ets_assign (cons std::string &ass, const std::vector<Target> &tgt,
+void ets_assign (const std::string &name, const std::vector<Target> &tgt,
       const std::vector<Cobra> &cobras,
       std::vector<size_t> &tid, std::vector<size_t> &fid)
   {
-  auto pass = make_assigner(ass);
-  pass->assign (tgt, cobras, tid, fid);
+  if (name=="naive")
+    NaiveAssigner tmp(tgt, cobras, tid, fid);
+  else if (name=="draining")
+    DrainingAssigner tmp(tgt, cobras, tid, fid);
+  else if (name=="draining_closest")
+    DrainingClosestAssigner tmp(tgt, cobras, tid, fid);
+  else if (name=="new")
+    NewAssigner tmp(tgt, cobras, tid, fid);
+  else
+    planck_fail("unknown assigner");
   }

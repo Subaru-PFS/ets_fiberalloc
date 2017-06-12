@@ -37,8 +37,8 @@ map<string,vector<double>> getAllCobras()
   map<string,vector<double>> res;
   auto c=makeCobras();
   for (size_t i=0; i<c.size(); ++i)
-    res[dataToString(i+1)] = {c[i].center.x,c[i].center.y,c[i].rmax,
-                              c[i].dotpos.x,c[i].dotpos.y,c[i].rdot};
+    res[dataToString(i+1)] = {c[i].center.x(),c[i].center.y(),c[i].rmax,
+                              c[i].dotpos.x(),c[i].dotpos.y(),c[i].rdot};
   return res;
   }
 
@@ -85,7 +85,7 @@ class ETShelper
       {
       map<string,vector<double>> res;
       for (auto t:tgt)
-        res[t.id]={t.pos.x,t.pos.y};
+        res[t.id]={t.pos.x(),t.pos.y()};
       return res;
       }
     map<string,vector<string>> getVis() const
@@ -110,10 +110,7 @@ class ETShelper
       for (auto i:idx)
         tgt2.push_back(tgt1[i]);
       if (!tgt2.empty())
-        {
-        unique_ptr<FiberAssigner> pass=make_assigner(assigner);
-        pass->assign(tgt2,cobras,tid,fid);
-        }
+        ets_assign(assigner,tgt2,cobras,tid,fid);
       for (size_t i=0; i<tid.size(); ++i)
         res[tgt[idx[tid[i]]].id] = dataToString(fid[i]+1);
       return res;

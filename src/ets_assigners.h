@@ -33,7 +33,7 @@
 #include <memory>
 #include "ets_tools.h"
 
-void ets_assign (cons std::string &ass, const std::vector<Target> &tgt,
+void ets_assign (const std::string &name, const std::vector<Target> &tgt,
       const std::vector<Cobra> &cobras,
       std::vector<size_t> &tid, std::vector<size_t> &fid);
 

@@ -10,16 +10,11 @@ PYFLAGS:=$(filter-out -Wstrict-prototypes,$(shell python-config --cflags --ldfla
 
 COMMON_FLAGS:=-O3 -g -fmax-errors=1 -std=c++14 -I src/external -W -Wall
 
-ifdef ORTOOLS
-OR_INC:=-I$(ORTOOLS)/include -DHAVE_ORTOOLS
-OR_LIB:=-L$(ORTOOLS)/lib -lortools
-endif
-
 ets_demo: $(DEMO_DEP)
-	$(CXX) $(COMMON_FLAGS) $(OR_INC) $(DEMO_SRC) -o ets_demo $(OR_LIB)
+	$(CXX) $(COMMON_FLAGS) $(DEMO_SRC) -o ets_demo
 
 pyETS: $(PYETS_DEP)
-	$(CXX) $(COMMON_FLAGS) -shared -fPIC -Isrc $(OR_INC) $(PYETS_SRC) -o pyETS.so $(OR_LIB) $(PYFLAGS)
+	$(CXX) $(COMMON_FLAGS) -shared -fPIC -Isrc $(PYETS_SRC) -o pyETS.so $(PYFLAGS)
 
 clean:
 	rm -f ./ets_demo pyETS.so

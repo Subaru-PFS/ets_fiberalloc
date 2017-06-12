@@ -15,18 +15,12 @@ pipeline and can be re-used for ETS
 Simply type "make". This requires a fairly recent version of GNU g++ (tested
 with version 5.3 and above, but any 5.x will probably work).
 
-If you have Google's "or-tools" package installed, you can also use the command
-"ORTOOLS=&lt;root_directory_of_ortools&gt; make". This will enable an additional,
-experimental assigning algorithm.
-
 ## Running the demo:
 
 Try, for example:
 `./ets_demo assigner=naive input=data/ets_test_data.dat n_exposures=10 output=output.txt time=2016-04-03T08:00:00Z`
 
-Supported values for "assigner" are "naive", "draining" and "new". Additionally,
-  the value "network" is accepted if the code was compiled with or-tools.
-
+Supported values for "assigner" are "naive", "draining" and "new".
 The algorithms are documented in the source code.
 
 - "n_exposures" is the number of individual observations performed (with
