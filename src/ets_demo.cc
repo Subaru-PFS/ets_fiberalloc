@@ -185,8 +185,8 @@ void subprocess (const vector<Target> &tgt, const vector<Cobra> &cobras,
       //FIXME: add PFI coordinates
       for (size_t i=0; i<tidmax.size(); ++i)
         fout << tgt1[tidmax[i]].id << toString(fidmax[i]+1,10)
-        << " " << toString(tgt1[tidmax[i]].pos.x,10,5)
-        << " " << toString(tgt1[tidmax[i]].pos.y,10,5)
+        << " " << toString(tgt1[tidmax[i]].pos.x(),10,5)
+        << " " << toString(tgt1[tidmax[i]].pos.y(),10,5)
         << " " << toString(rad2degr*tgt1[tidmax[i]].radec.phi,10,5)
         << " " << toString(90-rad2degr*tgt1[tidmax[i]].radec.theta,10,5)
         << " " << toString(cnt,7)
