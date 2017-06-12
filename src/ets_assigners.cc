@@ -268,6 +268,20 @@ int maxpri_in_fiber_closest (size_t fiber, const std::vector<Target> &tgt,
 
 } // unnamed namespace
 
+class FiberAssigner
+  {
+  public:
+    /*! Assign target from \a tgt to fibers according to a given strategy.
+        On return, \a tid and \a fid contain target resp. fiber IDs for the
+        assigned targets. Target IDs range from 0 to \a tgt.size()-1, fiber
+        IDs from 0 to 2393. */
+    virtual void assign (const std::vector<Target> &tgt,
+      const std::vector<Cobra> &cobras,
+      std::vector<size_t> &tid, std::vector<size_t> &fid) const = 0;
+
+    virtual ~FiberAssigner() {}
+  };
+
 class NaiveAssigner: public FiberAssigner
   {
   /*! Naive assignment algorithm: iterate over all fibers, and if a fiber has
@@ -285,6 +299,7 @@ class NaiveAssigner: public FiberAssigner
       {
       if (f2t[fiber].empty()) continue;
       int itgt = maxpri_in_fiber(fiber,tgt,f2t);
+      try_to_assign(itgt, fiber, f2t, t2f, tgt, cobras, tid, fid, larms);
       tid.push_back(itgt);
       fid.push_back(fiber);
       cleanup (tgt, raster, f2t, t2f, fiber, itgt);
@@ -493,4 +508,12 @@ unique_ptr<FiberAssigner> make_assigner(const string &name)
 #endif
   else
     planck_fail("unknown assigner");
+  }
+
+void ets_assign (cons std::string &ass, const std::vector<Target> &tgt,
+      const std::vector<Cobra> &cobras,
+      std::vector<size_t> &tid, std::vector<size_t> &fid)
+  {
+  auto pass = make_assigner(ass);
+  pass->assign (tgt, cobras, tid, fid);
   }

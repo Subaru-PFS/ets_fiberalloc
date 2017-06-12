@@ -33,20 +33,8 @@
 #include <memory>
 #include "ets_tools.h"
 
-class FiberAssigner
-  {
-  public:
-    /*! Assign target from \a tgt to fibers according to a given strategy.
-        On return, \a tid and \a fid contain target resp. fiber IDs for the
-        assigned targets. Target IDs range from 0 to \a tgt.size()-1, fiber
-        IDs from 0 to 2393. */
-    virtual void assign (const std::vector<Target> &tgt,
+void ets_assign (cons std::string &ass, const std::vector<Target> &tgt,
       const std::vector<Cobra> &cobras,
-      std::vector<size_t> &tid, std::vector<size_t> &fid) const = 0;
-
-    virtual ~FiberAssigner() {}
-  };
-
-std::unique_ptr<FiberAssigner> make_assigner(const std::string &name);
+      std::vector<size_t> &tid, std::vector<size_t> &fid);
 
 #endif

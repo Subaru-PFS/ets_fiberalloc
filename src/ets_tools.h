@@ -105,11 +105,20 @@ class fpraster
       { return indexx(pos.x) + nx*indexy(pos.y); }
 
   public:
+    fpraster (const vec2 &pmin, const vec2 &pmax, size_t nx_, size_t ny_)
+      : nx(nx_),ny(ny_),data(nx*ny)
+      {
+      planck_assert ((nx>0) && (ny>0), "bad array sizes");
+      x0=pmin.x(); y0=pmin.y();
+      x1=pmax.x(); y1=pmax.y();
+      idx=nx/(x1-x0);
+      idy=ny/(y1-y0);
+      }
     /*! Constructs an \a fpraster with \a nx_ bins in x direction and
         \a ny_ bins in y direction, and sorts the entries in \a loc_ into this
         structure. */
-    fpraster (const std::vector<vec2> &loc_, size_t nx_, size_t ny_) :
-      nx(nx_),ny(ny_),data(nx*ny), loc(loc_)
+    fpraster (const std::vector<vec2> &loc_, size_t nx_, size_t ny_)
+      : nx(nx_),ny(ny_),data(nx*ny), loc(loc_)
       {
       planck_assert ((nx>0) && (ny>0), "bad array sizes");
       planck_assert(loc.size()>0,"input array too small");
@@ -126,6 +135,11 @@ class fpraster
       idy=ny/(y1-y0);
       for (size_t i=0; i<loc.size(); ++i)
         data[index(loc[i])].push_back(i);
+      }
+    void add (const vec2 &pos)
+      {
+      loc.push_back(pos);
+      data[index(pos)].push_back(loc.size()-1);
       }
     /*! Returns the indices of all \a loc entries that lie within a circle of
         radius \a rad around \a center. */
@@ -157,6 +171,40 @@ class fpraster
           for (auto k : data[i+nx*j])
             if (center.dsq(loc[k])<=rsq) return true;
       return false;
+      }
+  };
+
+template<typename T> class fpraster2: public fpraster
+  {
+  private:
+    std::vector<T> obj;
+    double x0, y0, x1, y1, idx, idy;
+
+  public:
+    fpraster2 (const vec2 &pmin, const vec2 &pmax, size_t nx_, size_t ny_)
+      : fpraster(pmin, pmax, nx_, ny_) {}
+    void add (const vec2 &pos, const T &o)
+      {
+      loc.push_back(pos);
+      obj.push_back(o);
+      data[index(pos)].push_back(loc.size()-1);
+      }
+    /*! Returns the indices of all \a loc entries that lie within a circle of
+        radius \a rad around \a center. */
+    std::vector<T> queryObj(const vec2 &center, double rad) const
+      {
+      std::vector<T> res;
+      if ((center.x()<x0-rad)||(center.x()>x1+rad)
+        ||(center.y()<y0-rad)||(center.y()>y1+rad))
+        return res;
+      double rsq=rad*rad;
+      size_t i0=indexx(center.x()-rad), i1=indexx(center.x()+rad),
+             j0=indexy(center.y()-rad), j1=indexy(center.y()+rad);
+      for (size_t j=j0; j<=j1; ++j)
+        for (size_t i=i0; i<=i1; ++i)
+          for (auto k : data[i+nx*j])
+            if (center.dsq(loc[k])<=rsq) res.push_back(obj[k]);
+      return res;
       }
   };
 

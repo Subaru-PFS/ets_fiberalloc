@@ -62,7 +62,7 @@ vector<size_t> select_observable (const vector<Target> &tgt,
   }
 
 void single_exposure(const vector<Target> &tgt, const vector<Cobra> &cobras,
-  const pointing &center, double posang, const FiberAssigner &ass,
+  const pointing &center, double posang, const string &ass,
   vector<size_t> &tid, vector<size_t> &fid)
   {
   tid.clear(); fid.clear();
@@ -73,11 +73,11 @@ void single_exposure(const vector<Target> &tgt, const vector<Cobra> &cobras,
   vector<Target> tgt2;
   for (auto i:idx)
     tgt2.push_back(tgt1[i]);
-  if (!tgt2.empty()) ass.assign(tgt2,cobras,tid,fid);
+  if (!tgt2.empty()) ets_assign(ass,tgt2,cobras,tid,fid);
   for (size_t i=0; i<tid.size(); ++i)
     tid[i]=idx[tid[i]];
 #else
-  if (!tgt1.empty()) ass.assign(tgt1,tid,fid);
+  if (!tgt1.empty()) ets_assign(ass,tgt1,tid,fid);
 #endif
   }
 
@@ -85,7 +85,7 @@ void single_exposure(const vector<Target> &tgt, const vector<Cobra> &cobras,
 
 void optimal_exposure(const vector<Target> &tgt, const vector<Cobra> &cobras,
   pointing &center, double dptg, int nptg, double &posang, double dposang,
-  int nposang, const FiberAssigner &ass, vector<size_t> &tid,
+  int nposang, const string &ass, vector<size_t> &tid,
   vector<size_t> &fid)
   {
   double posang0=posang;
@@ -150,7 +150,7 @@ template<typename T> string toString(const T&val, int w, int p)
 void subprocess (const vector<Target> &tgt, const vector<Cobra> &cobras,
   const pointing &center0,
   double dptg, int nptg, double posang0, double dposang, int nposang,
-  int n_exposures, ofstream &fout, const FiberAssigner &ass)
+  int n_exposures, ofstream &fout, const string &ass)
   {
   vector<Target> tgt1=tgt;
   double ttime=0., acc=0., time2=0.;
@@ -241,7 +241,7 @@ vector<Target> readTargets (const string &name, const string &time)
 void process(const string &name, int n_exposures,
   const pointing &center, double dptg, int nptg, double posang, double dposang,
   int nposang, const string &out, const string &time,
-  const FiberAssigner &ass)
+  const string &ass)
   {
   vector<Target> tgt=readTargets(name,time);
   vector<Cobra> cobras(makeCobras());
@@ -291,7 +291,7 @@ int main(int argc, const char ** argv)
   parse_cmdline_equalsign (argc, argv, paramdict);
   paramfile params (paramdict);
 
-  unique_ptr<FiberAssigner> pass=make_assigner(params.find<string>("assigner"));
+  string ass=params.find<string>("assigner");
   pointing center;
   if (params.param_present("ra")||params.param_present("dec"))
     center=radec2ptg (params.find<double>("ra"), params.find<double>("dec"));
@@ -306,5 +306,5 @@ int main(int argc, const char ** argv)
   int nptg=params.find<int>("nptg",5);
   process (params.find<string>("input"),
     params.find<int>("n_exposures",1),center,dptg,nptg,posang,dposang,nposang,
-    params.find<string>("output",""),params.find<string>("time"),*pass);
+    params.find<string>("output",""),params.find<string>("time"),ass);
   }
