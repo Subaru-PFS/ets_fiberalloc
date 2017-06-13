@@ -329,20 +329,20 @@ class FiberAssigner
 class NaiveAssigner: public FiberAssigner
   {
   public:
-  NaiveAssigner (const vector<Target> &tgt_, const std::vector<Cobra> &cobras_,
-    vector<size_t> &tid_, vector<size_t> &fid_)
-    : FiberAssigner(tgt_, cobras_, tid_, fid_)
-    {
-    for (size_t fiber=0; fiber<f2t.size(); ++fiber)
+    NaiveAssigner (const vector<Target> &tgt_, const std::vector<Cobra> &cobras_,
+      vector<size_t> &tid_, vector<size_t> &fid_)
+      : FiberAssigner(tgt_, cobras_, tid_, fid_)
       {
-      if (f2t[fiber].empty()) continue;
-      int itgt = maxpri_in_fiber(fiber);
- //     try_to_assign(itgt, fiber, f2t, t2f, tgt, cobras, tid, fid, larms);
-      tid.push_back(itgt);
-      fid.push_back(fiber);
-      cleanup (fiber, itgt);
+      for (size_t fiber=0; fiber<f2t.size(); ++fiber)
+        {
+        if (f2t[fiber].empty()) continue;
+        int itgt = maxpri_in_fiber(fiber);
+   //     try_to_assign(itgt, fiber, f2t, t2f, tgt, cobras, tid, fid, larms);
+        tid.push_back(itgt);
+        fid.push_back(fiber);
+        cleanup (fiber, itgt);
+        }
       }
-    }
   };
 
   /*! Assignment strategy modeled after Morales et al. 2012: MNRAS 419, 1187
@@ -352,28 +352,28 @@ class NaiveAssigner: public FiberAssigner
 class DrainingAssigner: public FiberAssigner
   {
   public:
-  DrainingAssigner (const vector<Target> &tgt_, const std::vector<Cobra> &cobras_,
-    vector<size_t> &tid_, vector<size_t> &fid_)
-    : FiberAssigner(tgt_, cobras_, tid_, fid_)
-    {
-    size_t maxtgt=0;
-    for (const auto &f:f2t)
-      maxtgt=max(maxtgt,f.size());
-
-    while (true)
+    DrainingAssigner (const vector<Target> &tgt_, const std::vector<Cobra> &cobras_,
+      vector<size_t> &tid_, vector<size_t> &fid_)
+      : FiberAssigner(tgt_, cobras_, tid_, fid_)
       {
-      int fiber=-1;
-      size_t mintgt=maxtgt+1;
-      for (size_t i=0; i<f2t.size(); ++i)
-        if ((f2t[i].size()<mintgt)&&(f2t[i].size()>0))
-          { fiber=i; mintgt=f2t[i].size(); }
-      if (fiber==-1) break; // assignment done
-      int itgt = maxpri_in_fiber(fiber);
-      tid.push_back(itgt);
-      fid.push_back(fiber);
-      cleanup(fiber,itgt);
+      size_t maxtgt=0;
+      for (const auto &f:f2t)
+        maxtgt=max(maxtgt,f.size());
+
+      while (true)
+        {
+        int fiber=-1;
+        size_t mintgt=maxtgt+1;
+        for (size_t i=0; i<f2t.size(); ++i)
+          if ((f2t[i].size()<mintgt)&&(f2t[i].size()>0))
+            { fiber=i; mintgt=f2t[i].size(); }
+        if (fiber==-1) break; // assignment done
+        int itgt = maxpri_in_fiber(fiber);
+        tid.push_back(itgt);
+        fid.push_back(fiber);
+        cleanup(fiber,itgt);
+        }
       }
-    }
   };
 
   /*! Assignment strategy modeled after Morales et al. 2012: MNRAS 419, 1187
@@ -385,28 +385,28 @@ class DrainingAssigner: public FiberAssigner
 class DrainingClosestAssigner: public FiberAssigner
   {
   public:
-  DrainingClosestAssigner (const vector<Target> &tgt_, const std::vector<Cobra> &cobras_,
-    vector<size_t> &tid_, vector<size_t> &fid_)
-    : FiberAssigner(tgt_, cobras_, tid_, fid_)
-    {
-    size_t maxtgt=0;
-    for (const auto &f:f2t)
-      maxtgt=max(maxtgt,f.size());
-
-    while (true)
+    DrainingClosestAssigner (const vector<Target> &tgt_, const std::vector<Cobra> &cobras_,
+      vector<size_t> &tid_, vector<size_t> &fid_)
+      : FiberAssigner(tgt_, cobras_, tid_, fid_)
       {
-      int fiber=-1;
-      size_t mintgt=maxtgt+1;
-      for (size_t i=0; i<f2t.size(); ++i)
-        if ((f2t[i].size()<mintgt)&&(f2t[i].size()>0))
-          { fiber=i; mintgt=f2t[i].size(); }
-      if (fiber==-1) break; // assignment done
-      int itgt = maxpri_in_fiber_closest(fiber);
-      tid.push_back(itgt);
-      fid.push_back(fiber);
-      cleanup(fiber,itgt);
+      size_t maxtgt=0;
+      for (const auto &f:f2t)
+        maxtgt=max(maxtgt,f.size());
+
+      while (true)
+        {
+        int fiber=-1;
+        size_t mintgt=maxtgt+1;
+        for (size_t i=0; i<f2t.size(); ++i)
+          if ((f2t[i].size()<mintgt)&&(f2t[i].size()>0))
+            { fiber=i; mintgt=f2t[i].size(); }
+        if (fiber==-1) break; // assignment done
+        int itgt = maxpri_in_fiber_closest(fiber);
+        tid.push_back(itgt);
+        fid.push_back(fiber);
+        cleanup(fiber,itgt);
+        }
       }
-    }
   };
 
   /*! Assignment strategy with the goal of reducing inhomogeneity in the
@@ -460,29 +460,29 @@ class NewAssigner: public FiberAssigner
       }
 
   public:
-  NewAssigner (const vector<Target> &tgt_, const std::vector<Cobra> &cobras_,
-    vector<size_t> &tid_, vector<size_t> &fid_)
-    : FiberAssigner(tgt_, cobras_, tid_, fid_)
-    {
-    pqueue<pq_entry> pri=calc_pri();
-
-    while (true)
+    NewAssigner (const vector<Target> &tgt_, const std::vector<Cobra> &cobras_,
+      vector<size_t> &tid_, vector<size_t> &fid_)
+      : FiberAssigner(tgt_, cobras_, tid_, fid_)
       {
-      if (pri.top_priority().pri==(1<<30)) break;
-      size_t itgt=pri.top();
-      if (t2f[itgt].empty())
-        { pri.set_priority(pq_entry(0.,(1<<30)),itgt); continue; }
-      size_t ifib=0, mintgt=f2t[t2f[itgt][ifib]].size();
-      for (size_t i=1; i<t2f[itgt].size(); ++i)
-        if (f2t[t2f[itgt][i]].size()<mintgt)
-          { ifib=i; mintgt=f2t[t2f[itgt][i]].size(); }
-      int fiber=t2f[itgt][ifib];
-      tid.push_back(itgt);
-      fid.push_back(fiber);
-      cleanup(fiber,itgt);
-      fix_priority(itgt,pri);
+      pqueue<pq_entry> pri=calc_pri();
+
+      while (true)
+        {
+        if (pri.top_priority().pri==(1<<30)) break;
+        size_t itgt=pri.top();
+        if (t2f[itgt].empty())
+          { pri.set_priority(pq_entry(0.,(1<<30)),itgt); continue; }
+        size_t ifib=0, mintgt=f2t[t2f[itgt][ifib]].size();
+        for (size_t i=1; i<t2f[itgt].size(); ++i)
+          if (f2t[t2f[itgt][i]].size()<mintgt)
+            { ifib=i; mintgt=f2t[t2f[itgt][i]].size(); }
+        int fiber=t2f[itgt][ifib];
+        tid.push_back(itgt);
+        fid.push_back(fiber);
+        cleanup(fiber,itgt);
+        fix_priority(itgt,pri);
+        }
       }
-    }
   };
 
 void ets_assign (const std::string &name, const std::vector<Target> &tgt,
