@@ -48,10 +48,9 @@ class Target
     vec2 pos;
     double time;
     int pri;
-    std::string id;
 
-    Target (const vec2 &pos_,double time_,const std::string &id_,int pri_)
-      : pos(pos_), time(time_), pri(pri_), id(id_) {}
+    Target (const vec2 &pos_,double time_,int pri_)
+      : pos(pos_), time(time_), pri(pri_) {}
   };
 
 class Cobra
