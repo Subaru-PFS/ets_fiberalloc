@@ -51,7 +51,7 @@ vector<size_t> select_observable (const vector<Target> &tgt,
   for (size_t i=0; i<fpos.size(); ++i)
     {
     fpos[i]=cobras[i].center;
-    rmax=max(rmax,cobras[i].rmax);
+    rmax=max(rmax,cobras[i].l1+cobras[i].l2);
     }
   fpraster raster(fpos,100,100);
   vector<size_t> res;

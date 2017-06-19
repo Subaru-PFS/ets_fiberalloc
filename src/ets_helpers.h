@@ -21,22 +21,11 @@
  *  Astrophysik.
  */
 
-/*! \file ets_assigners.h
- *  Copyright (C) 2017 Max-Planck-Society
- *  Author: Martin Reinecke
- */
+#ifndef ETS_HELPERS_H
+#define ETS_HELPERS_H
 
-#ifndef ETS_ASSIGNERS_H
-#define ETS_ASSIGNERS_H
+#include "ets.h"
 
-#include <vector>
-#include <memory>
-#include "ets_tools.h"
-
-void setCollisionDistance(double dist);
-
-void ets_assign (const std::string &name, const std::vector<Target> &tgt,
-      const std::vector<Cobra> &cobras,
-      std::vector<size_t> &tid, std::vector<size_t> &fid);
+std::vector<Cobra> makeCobras();
 
 #endif
