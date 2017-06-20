@@ -22,8 +22,8 @@ map<string,vector<double>> getAllCobras()
   return res;
   }
 
-vector<vector<size_t>> getVis(const vector<complex<double>> &t_pos,
-                              const map<string,vector<double>> &cbr)
+map<size_t,vector<size_t>> getVis(const vector<complex<double>> &t_pos,
+                                  const map<string,vector<double>> &cbr)
   {
   vector<Target> tgt;
   for (size_t i=0; i<t_pos.size(); ++i)
@@ -38,14 +38,18 @@ vector<vector<size_t>> getVis(const vector<complex<double>> &t_pos,
       auto d(it->second);
       cobras.emplace_back(vec2(d[0],d[1]),d[2],d[3],vec2(d[4],d[5]),d[6]);
       }
-  return getT2F(tgt,cobras);
+  auto tmp = getT2F(tgt,cobras);
+  map<size_t,vector<size_t>> res;
+  for (size_t i=0; i< tmp.size(); ++i)
+    if (tmp[i].size()>0) res[i]=tmp[i];
+  return res;
   }
 
-vector<int> getObs(const vector<complex<double>> &t_pos,
-                   const vector<double> &t_time,
-                   const vector<int> &t_pri,
-                   const map<string,vector<double>> &cbr,
-                   const string &assigner)
+map<size_t,size_t> getObs(const vector<complex<double>> &t_pos,
+                          const vector<double> &t_time,
+                          const vector<int> &t_pri,
+                          const map<string,vector<double>> &cbr,
+                          const string &assigner)
   {
   planck_assert((t_pos.size()==t_time.size())
               &&(t_pos.size()==t_pri.size()), "vector length mismatch");
@@ -66,9 +70,9 @@ vector<int> getObs(const vector<complex<double>> &t_pos,
   vector<size_t> tid, fid;
   if (!tgt.empty())
     getObservation(tgt,cobras,assigner,tid,fid);
-  vector<int>res(cobras.size(),-1);
-  for (size_t i=0; i<fid.size(); ++i)
-    res[fid[i]] = tid[i];
+  map<size_t,size_t> res;
+  for (size_t i=0; i<tid.size(); ++i)
+    res[tid[i]] = fid[i];
   return res;
   }
 
