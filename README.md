@@ -41,7 +41,7 @@ The columns within a line contain the following information:
 
 1. Naive:
   - For each fiber, assign the target with the highest priority visible with this
-    fiber.
+    fiber. If there is more than one valid target, choose one randomly.
 
 2. Draining:
   - While targets are still visible with any fiber:
