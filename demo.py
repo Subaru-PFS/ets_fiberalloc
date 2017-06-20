@@ -62,7 +62,7 @@ def radec2pos(ras, decs, raTel=None, decTel=None, raUp=None, decUp=None):
 cobras = pyETS.getAllCobras()
 
 # Parse a target file and return the quantities of interest
-ids,ras,decs,times,pris = readTargets("cosmology.dat")
+ids,ras,decs,times,pris = readTargets("data/ets_test_data.dat")
 pos = radec2pos(ras,decs)
 
 # get a list of targets, and a list of Cobras that can observe them
