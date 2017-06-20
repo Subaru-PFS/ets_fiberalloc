@@ -1,64 +1,29 @@
 ## Overview over the files:
 
-src/ets_demo.cc:
-Main file containing the experimental fiber assignment code.
+src/pyETS.cc:
+wrapper file describing the functionality exported to Python
 
-src/astronomy.*:
-Code for computing the RA/Dec -> alt/AZ conversion.
+src/ets.*, src/ets_helpers.h:
+C++ implementation of the assigners and associated functionality
 
 Directory src/external/
 C and C++ sources that were originally developed for the Planck simulation
 pipeline and can be re-used for ETS
+
+Directory src/pybind11/
+Pybind11 headers for C++/Python integration
 
 ## Compiling the code:
 
 Simply type "make". This requires a fairly recent version of GNU g++ (tested
 with version 5.3 and above, but any 5.x will probably work).
 
-## Running the demo:
+## Demo code:
 
-Try, for example:
-`./ets_demo assigner=naive input=data/ets_test_data.dat n_exposures=10 output=output.txt time=2016-04-03T08:00:00Z`
-
-Supported values for "assigner" are "naive", "draining" and "new".
-The algorithms are documented in the source code.
-
-- "n_exposures" is the number of individual observations performed (with
-  potential repointing of the telescope in between).
-
-- "time" is an ISO 8601 string containing the date and time of the observation.
-  This is needed to calculate the telescope elevation, the exact azimuth and altitude
-  of the targets as seen from Subaru, and the distortion of target positions in the
-  instrument's focal plane.
-  NOTE: Currenty, only strings in the exact format "yyyy-mm-ddThh:mm:ssZ" are
-  accepted. If necessary, the parser can be made more flexible.
-
-- "output" is an optional parameter. If present, it is the name of a file into
-which detailed fiber assignment data is written, including target IDs and the
-fiber IDs to which they are assigned, as well as focal plane coordinates and
-RA/DEC of the targets.
-
-- "ra" and "dec" are optional parameters specifying the approximate telescope
-pointing (in degrees). If not specified, the code will use the geometrical
-center of the input data.
-
-- "posang" is an optional parameter specifying the desired position angle (in
-degrees) of the PFS. If unspecified, it is assumed to be 0.
-
-- "dposang" is an optional parameter describing the maximum deviation (in degrees)
-from the specified position angle when searching for the optimal telescope
-orientation. Default is 4 degrees.
-
-- "nposang" is the number of different position angles tried (in the range
-posang+-dposang) when searching for the optimal telescope orientation.
-Default is 5.
-
-- "dptg" is an optional parameter describing the maximum deviation (in millimeters
-on the PFI plane) from the specified RA/DEC when searching for the optimal
-telescope pointing. Default is 4mm.
-
-- "nptg" is the number of different pointings tried (in both directions)
-when searching for the optimal telescope pointing. Default is 5.
+The file demo.py contains a very brief overview over the typical workflow, i.e.
+reading in target data from a file, converting target positions to x/y
+coordinates on the focal plane, determining which targets can be seen by which
+cobras, and performing a single assignment.
 
 The input file containing the targets is ASCII and contains one target per line.
 The columns within a line contain the following information:
@@ -72,28 +37,6 @@ The columns within a line contain the following information:
  7. Redshift (optional)
  8. Object Type (optional)
 
-The code first loads the required data set, and then runs the fiber assignment
-algorithm assuming that the telescope points at the specified position
-position.
-
-For each exposure, the code
-- determines which targets are observed with which fibers
-  (this depends on the concrete assigner selected by the user)
-  This is repeated nptg x nptg x nposang times with the telescope shifted by small amounts in
-  x and y directions, and rotating the PFS by small amounts, and the attempt
-  with the most assigned fibers is chosen.
-  The exposure time is the minimum remaining observation time of all assigned
-  targets.
-  These lists are written to the output file, if specified.
-- subtracts the exposure time from the planned exposure times of the observed
-  targets. If their time becomes <=0, they are removed from the target list.
-- repeats the above steps until the requested number of exposures is reached.
-
-At each step, the fraction of allocated fibers and the accumulated fraction of
-total observation time is printed.
-
-Target priorities are taken into account by the assignment algorithms.
-
 ### Short description of the assigner algorithms:
 
 1. Naive:
@@ -103,7 +46,14 @@ Target priorities are taken into account by the assignment algorithms.
 2. Draining:
   - While targets are still visible with any fiber:
     - find the fiber with the lowest number of visible targets, and assign the
-      visible target with the highest prioity to it
+      visible target with the highest prioity to it. If there is more than one
+      valid target, choose one randomly.
+
+2. Draining_closest:
+  - While targets are still visible with any fiber:
+    - find the fiber with the lowest number of visible targets, and assign the
+      visible target with the highest prioity to it. If there is more than one
+      valid target, choose the one closest to the Cobra center.
 
 3. New:
   - While targets are still visible with any fiber:
@@ -120,19 +70,6 @@ Target priorities are taken into account by the assignment algorithms.
       r_ij=0 and drop off to zero for radii around the fiber patrol radius.
       This function ensures that each fiber is assigned to more 'crowded' areas of the
       target field first, with the goal of homogenizing the distribution of targets.
-
-4. Network:
-  - Solve a min-cost network to find a fiber configuration with the largest
-    number of assigned targets. Priorities and collisions are currently _ignored_.
-
-## Compiling the Python interface (VERY experimental!)
-
-Simply type "make pyETS". This produces the file "pyETS.so", which can be loaded
-from Python via "import pyETS"; help is available within Python via
-"help(pyETS)".
-
-CAUTION: this interface is currently meant for internal testing purposes only
-and will most likely change in non-backwards-compatible ways!
 
 ### Comments on the choice of algorithm:
 
