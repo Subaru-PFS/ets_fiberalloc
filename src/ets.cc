@@ -156,7 +156,7 @@ class ETS_data
     const std::vector<Cobra> &cbr;
     fpraster rtgt, rcbr;
     std::vector<std::vector<size_t>> f2t,t2f;
-    double colldist;
+    double colldist, rmax;
 
     /*! Computes the fiber->target and target->fiber mappings. */
     void calcMappings()
@@ -253,7 +253,7 @@ class ETS_data
         // remove all other target-fiber combinations that would leave the elbow
         // within the lower arm region of this cobra.
         auto tmp2 = rcbr.query(0.5*(tippos+elbowpos),
-                    colldist+5+0.5*cbr[fiber].l2);//FIXME!!
+                    colldist+rmax+0.5*cbr[fiber].l2);//FIXME!!
         for (auto i:tmp2)
           {
           auto cpy(f2t[i]);
@@ -278,6 +278,9 @@ class ETS_data
         rcbr(cbr2raster(cbr,100,100)),colldist(colldist_)
       {
       calcMappings();
+      rmax=0;
+      for (auto c : cbr)
+        rmax=max(rmax,c.l1+c.l2);
       }
     std::vector<std::vector<size_t>> F2T() const { return f2t; }
     std::vector<std::vector<size_t>> T2F() const { return t2f; }

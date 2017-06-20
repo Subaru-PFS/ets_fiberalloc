@@ -18,31 +18,33 @@ def readTargets(fname):
                 decs.append(dec)
                 times.append(time)
                 pris.append(pri)
-        ras=np.asarray(ras)*np.pi/180.
-        decs=np.asarray(decs)*np.pi/180.
-        loc=np.empty((len(ras),3),dtype=np.float64)
-        loc[:,0]=np.cos(decs)*np.cos(ras)
-        loc[:,1]=np.cos(decs)*np.sin(ras)
-        loc[:,2]=np.sin(decs)
-        vavg=np.average(loc,axis=0)
-        vavg/=np.linalg.norm(vavg)
-        xvec=np.cross(vavg,np.array([0.,0.,1.]))
-        xvec/=np.linalg.norm(xvec)
-        yvec=np.cross(vavg,xvec)
-        rad2mm=20000
-        pos=(np.dot(loc,xvec) + 1j*np.dot(loc,yvec))*rad2mm
-    return ids,pos,times,pris
+    return ids, ras, decs, times, pris
+
+def radec2pos(ras, decs, raTel=None, decTel=None, raUp=None, decUp=None):
+    ras=np.asarray(ras)*np.pi/180.
+    decs=np.asarray(decs)*np.pi/180.
+    loc=np.empty((len(ras),3),dtype=np.float64)
+    loc[:,0]=np.cos(decs)*np.cos(ras)
+    loc[:,1]=np.cos(decs)*np.sin(ras)
+    loc[:,2]=np.sin(decs)
+    vavg=np.average(loc,axis=0)
+    vavg/=np.linalg.norm(vavg)
+    xvec=np.cross(vavg,np.array([0.,0.,1.]))
+    xvec/=np.linalg.norm(xvec)
+    yvec=np.cross(vavg,xvec)
+    rad2mm=180/np.pi*320 #very crude approximation
+    pos=(-np.dot(loc,xvec) + 1j*np.dot(loc,yvec))*rad2mm
+    return pos
 
 # Parse a target file and return the quantities of interest
-ids,pos,times,pris = readTargets("cosmology.dat")
-
-# Initialize the ETS class with target data, telescope pointing and observation time
-ets=pyETS.ETShelper(pos,times,pris,pyETS.getAllCobras())
+ids,ras,decs,times,pris = readTargets("cosmology.dat")
+pos = radec2pos(ras,decs)
 
 # get a list of targets, and a list of Cobras that can observe them
-visibility_map=ets.getVis()
+visibility_map=pyETS.getVis(pos,pyETS.getAllCobras())
 
 # perform target asignment using the "draining" algorithm, and return the list
 # of assigned targets and which cobras were used to observe them.
-res=ets.getObs("draining_closest")
+res=pyETS.getObs(pos,times,pris,pyETS.getAllCobras(),"draining_closest")
+print res
 
