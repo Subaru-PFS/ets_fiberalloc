@@ -85,13 +85,14 @@ PYBIND11_PLUGIN(pyETS)
     "Python interface for some of the ETS C++ functionality");
 
   m.def("getVis", &getVis,
-    "returns a list of the visible targets and the fibers that can observe them\n"
+    "returns a list of the visible targets and the fibers that can observe them.\n"
     "Args:\n"
     "  t_pos  : Target x/y coordinates on the focal plane (in mm)\n"
     "  cbr    : dictionary of cobras (if empty, a default set is used)\n",
     "t_pos"_a, "cbr"_a);
   m.def("getObs", &getObs,
-    "returns a list of the visible targets and the fibers that can observe them",
+    "performs an assignment step and returns a dictionary containing the\n"
+    "observed target numbers and the assigned cobra numbers\n"
     "Args:\n"
     "  t_pos   : Target x/y coordinates on the focal plane (in mm)\n"
     "  t_time  : requested target observation times (in seconds) (unused)\n"
@@ -101,8 +102,9 @@ PYBIND11_PLUGIN(pyETS)
     "            'draining', 'draining_closest' or 'new'\n",
     "t_pos"_a, "t_time"_a, "t_pri"_a, "cbr"_a, "assigner"_a);
   m.def("getAllCobras", &getAllCobras,
-    "returns a dictionary containing all cobras. A cobra is defined by a\n"
-    "6-tuple of real numbers (unit is mm):\n"
+    "returns a dictionary containing all cobras of an idealized instrument\n"
+    "configuration. A cobra is defined by a 6-tuple of real numbers (unit is\n"
+    "mm):\n"
     "  x position of the cobra center\n"
     "  y position pf the cobra center\n"
     "  length l1 (link between center of cobra and 'elbow')\n"
