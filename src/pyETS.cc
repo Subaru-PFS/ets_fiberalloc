@@ -103,7 +103,7 @@ PYBIND11_PLUGIN(pyETS)
     "t_pos"_a, "t_time"_a, "t_pri"_a, "cbr"_a, "assigner"_a);
   m.def("getAllCobras", &getAllCobras,
     "returns a dictionary containing all cobras of an idealized instrument\n"
-    "configuration. A cobra is defined by a 6-tuple of real numbers (unit is\n"
+    "configuration. A cobra is defined by a 7-tuple of real numbers (unit is\n"
     "mm):\n"
     "  x position of the cobra center\n"
     "  y position pf the cobra center\n"
