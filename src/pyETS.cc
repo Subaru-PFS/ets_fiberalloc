@@ -106,7 +106,7 @@ PYBIND11_PLUGIN(pyETS)
     "configuration. A cobra is defined by a 7-tuple of real numbers (unit is\n"
     "mm):\n"
     "  x position of the cobra center\n"
-    "  y position pf the cobra center\n"
+    "  y position of the cobra center\n"
     "  length l1 (link between center of cobra and 'elbow')\n"
     "  length l2 (link between 'elbow' and tip\n"
     "  x position of the dot\n"
