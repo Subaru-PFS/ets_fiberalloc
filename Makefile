@@ -10,11 +10,13 @@ PYFLAGS:=$(filter-out -Wstrict-prototypes,$(shell python-config --cflags --ldfla
 
 COMMON_FLAGS:=-O3 -g -fmax-errors=1 -std=c++14 -I src/external -W -Wall
 
-pyETS: $(PYETS_DEP)
+default: pyETS.so pycconv.so
+
+pyETS.so: $(PYETS_DEP)
 	$(CXX) $(COMMON_FLAGS) -shared -fPIC -Isrc $(PYETS_SRC) -o pyETS.so $(PYFLAGS)
 
-pycconv: $(PYCCONG_DEP)
+pycconv.so: $(PYCCONV_DEP)
 	$(CXX) $(COMMON_FLAGS) -shared -fPIC -Isrc $(PYCCONV_SRC) -o pycconv.so $(PYFLAGS)
 
 clean:
-	rm -f pyETS.so
+	rm -f pyETS.so pycconv.so
