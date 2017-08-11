@@ -12,18 +12,26 @@ namespace {
 
 namespace py = pybind11;
 
-vector<vector<double>> getAllCobras()
+py::list getAllCobras()
   {
   auto c=makeCobras();
   auto ncb = c.size();
-  vector<vector<double>> res(ncb);
+  auto res = py::list();
   for (size_t i=0; i<ncb; ++i)
-    res[i]=vector<double>{c[i].center.x(),c[i].center.y(),c[i].l1,c[i].l2,c[i].dotpos.x(),c[i].dotpos.y(),c[i].rdot};
+    {
+    auto tmp = py::list();
+    tmp.append(py::cast(complex<double>(c[i].center.x(),c[i].center.y())));
+    tmp.append(py::cast(c[i].l1));
+    tmp.append(py::cast(c[i].l2));
+    tmp.append(py::cast(complex<double>(c[i].dotpos.x(),c[i].dotpos.y())));
+    tmp.append(py::cast(c[i].rdot));
+    res.append(tmp);
+    }
   return res;
   }
 
 map<size_t,vector<size_t>> getVis(const vector<complex<double>> &t_pos,
-  const vector<vector<double>> &cbr)
+  const py::list &cbr)
   {
   vector<Target> tgt;
   for (size_t i=0; i<t_pos.size(); ++i)
@@ -31,7 +39,11 @@ map<size_t,vector<size_t>> getVis(const vector<complex<double>> &t_pos,
 
   vector<Cobra> cobras;
   for (auto i:cbr)
-    cobras.emplace_back(vec2(i[0],i[1]),i[2],i[3],vec2(i[4],i[5]),i[6]);
+    cobras.emplace_back(i[py::cast(0)].cast<complex<double>>(),
+                        i[py::cast(1)].cast<double>(),
+                        i[py::cast(2)].cast<double>(),
+                        i[py::cast(3)].cast<complex<double>>(),
+                        i[py::cast(4)].cast<double>());
   auto tmp = getT2F(tgt,cobras);
   map<size_t,vector<size_t>> res;
   for (size_t i=0; i< tmp.size(); ++i)
@@ -42,7 +54,7 @@ map<size_t,vector<size_t>> getVis(const vector<complex<double>> &t_pos,
 map<size_t,size_t> getObs(const vector<complex<double>> &t_pos,
                           const vector<double> &t_time,
                           const vector<int> &t_pri,
-                          const vector<vector<double>> &cbr,
+                          const py::list &cbr,
                           const string &assigner)
   {
   planck_assert((t_pos.size()==t_time.size())
@@ -53,7 +65,11 @@ map<size_t,size_t> getObs(const vector<complex<double>> &t_pos,
 
   vector<Cobra> cobras;
   for (auto i:cbr)
-    cobras.emplace_back(vec2(i[0],i[1]),i[2],i[3],vec2(i[4],i[5]),i[6]);
+    cobras.emplace_back(i[py::cast(0)].cast<complex<double>>(),
+                        i[py::cast(1)].cast<double>(),
+                        i[py::cast(2)].cast<double>(),
+                        i[py::cast(3)].cast<complex<double>>(),
+                        i[py::cast(4)].cast<double>());
 
   vector<size_t> tid, fid;
   if (!tgt.empty())
@@ -92,13 +108,11 @@ PYBIND11_PLUGIN(pyETS)
   m.def("getAllCobras", &getAllCobras,
     "returns a list containing the parameters of all cobras of an idealized \n"
     " instrument configuration. The parameters are in turn stored as\n"
-    " 7-element lists of floating point numbers (unit is mm):\n"
-    "  x position of the cobra center\n"
-    "  y position of the cobra center\n"
+    " 5-element lists of numbers (unit is mm):\n"
+    "  cobra center (complex)\n"
     "  length l1 (link between center of cobra and 'elbow')\n"
     "  length l2 (link between 'elbow' and tip\n"
-    "  x position of the dot\n"
-    "  y position of the dot\n"
+    "  dot position (complex)\n"
     "  dot radius");
   return m.ptr();
   }
