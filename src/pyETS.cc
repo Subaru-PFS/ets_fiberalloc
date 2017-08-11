@@ -1,11 +1,10 @@
-#include <iostream>
-#include <vector>
-#include <string>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
+#include <pybind11/complex.h>
 
-#include "ets_tools.h"
-#include "ets_assigners.h"
+#include "string_utils.h"
+#include "ets.h"
+#include "ets_helpers.h"
 
 using namespace std;
 
@@ -13,112 +12,73 @@ namespace {
 
 namespace py = pybind11;
 
-/*! Discard targets that are too far away from the PFS. */
-vector<size_t> select_observable (const vector<Target> &tgt,
-  const vector<Cobra> &cobras, double safety)
+py::list getAllCobras()
   {
-  vector<vec2> fpos(cobras.size());
-  double rmax=0;
-  for (size_t i=0; i<fpos.size(); ++i)
-    {
-    fpos[i]=cobras[i].center;
-    rmax=max(rmax,cobras[i].rmax);
-    }
-  fpraster raster(fpos,100,100);
-  vector<size_t> res;
-  for (size_t i=0; i<tgt.size(); ++i)
-    if (raster.anyIn(tgt[i].pos,rmax+safety))
-      res.push_back(i);
-  return res;
-  }
-
-map<string,vector<double>> getAllCobras()
-  {
-  map<string,vector<double>> res;
   auto c=makeCobras();
-  for (size_t i=0; i<c.size(); ++i)
-    res[dataToString(i+1)] = {c[i].center.x,c[i].center.y,c[i].rmax,
-                              c[i].dotpos.x,c[i].dotpos.y,c[i].rdot};
+  auto ncb = c.size();
+  auto res = py::list();
+  for (size_t i=0; i<ncb; ++i)
+    {
+    auto tmp = py::list();
+    tmp.append(py::cast(complex<double>(c[i].center.x(),c[i].center.y())));
+    tmp.append(py::cast(c[i].l1));
+    tmp.append(py::cast(c[i].l2));
+    tmp.append(py::cast(complex<double>(c[i].dotpos.x(),c[i].dotpos.y())));
+    tmp.append(py::cast(c[i].rdot));
+    res.append(tmp);
+    }
   return res;
   }
 
-class ETShelper
+map<size_t,vector<size_t>> getVis(const vector<complex<double>> &t_pos,
+  const py::list &cbr)
   {
-  private:
-    vector<vector<size_t>> f2t,t2f;
-    vector<Target> tgt;
-    vector<Cobra> cobras;
-    pointing center;
+  vector<Target> tgt;
+  for (size_t i=0; i<t_pos.size(); ++i)
+    tgt.emplace_back(t_pos[i],1.,1);
 
-  public:
-    ETShelper(const vector<string> &t_id,
-              const vector<double> &t_ra,
-              const vector<double> &t_dec,
-              const vector<double> &t_time,
-              const vector<int> &t_pri,
-              const map<string,vector<double>> &cbr,
-              double tel_ra, double tel_dec, double posang, string time)
-      {
-      center=radec2ptg(tel_ra, tel_dec);
-      planck_assert(t_ra.size()==t_dec.size(),"array size mismatch");
-      planck_assert(t_ra.size()==t_id.size(),"array size mismatch");
-      for (size_t i=0; i<t_ra.size(); i++)
-        tgt.emplace_back
-          (radec2ptg(t_ra[i],t_dec[i]),t_time[i],t_id[i],t_pri[i]);
-      eq2hor eqtest(obs_lat, obs_lon, obs_height, time);
-      center = eqtest.radec2altaz(center);
-      for (auto &t:tgt)
-        t.altaz=eqtest.radec2altaz(t.radec);
-      targetToPFI(tgt, center, posang);
-      fpraster raster=tgt2raster(tgt,100,100);
-      if (cbr.empty())
-        cobras=makeCobras();
-      else
-        for (auto it=cbr.begin(); it!=cbr.end(); ++it)
-          {
-          auto d(it->second);
-          cobras.emplace_back(vec2(d[0],d[1]),d[2],vec2(d[3],d[4]),d[5]);
-          }
-      calcMappings(tgt,cobras,raster,f2t,t2f);
-      }
-    map<string,vector<double>> getTgtpos() const
-      {
-      map<string,vector<double>> res;
-      for (auto t:tgt)
-        res[t.id]={t.pos.x,t.pos.y};
-      return res;
-      }
-    map<string,vector<string>> getVis() const
-      {
-      map<string,vector<string>> res;
-      for (size_t i=0; i<t2f.size(); ++i)
-        {
-        vector<string> tmp;
-        for (auto j : t2f[i])
-          tmp.push_back(dataToString(j+1));
-        res[tgt[i].id]=tmp;
-        }
-      return res;
-      }
-    map<string,string> getObservation(string assigner) const
-      {
-      map<string,string> res;
-      vector<size_t> tid, fid;
-      vector<Target> tgt1(tgt);
-      vector<size_t> idx = select_observable (tgt1, cobras, r_kernel);
-      vector<Target> tgt2;
-      for (auto i:idx)
-        tgt2.push_back(tgt1[i]);
-      if (!tgt2.empty())
-        {
-        unique_ptr<FiberAssigner> pass=make_assigner(assigner);
-        pass->assign(tgt2,cobras,tid,fid);
-        }
-      for (size_t i=0; i<tid.size(); ++i)
-        res[tgt[idx[tid[i]]].id] = dataToString(fid[i]+1);
-      return res;
-      }
-  };
+  vector<Cobra> cobras;
+  for (auto i:cbr)
+    cobras.emplace_back(i[py::cast(0)].cast<complex<double>>(),
+                        i[py::cast(1)].cast<double>(),
+                        i[py::cast(2)].cast<double>(),
+                        i[py::cast(3)].cast<complex<double>>(),
+                        i[py::cast(4)].cast<double>());
+  auto tmp = getT2F(tgt,cobras);
+  map<size_t,vector<size_t>> res;
+  for (size_t i=0; i< tmp.size(); ++i)
+    if (tmp[i].size()>0) res[i]=tmp[i];
+  return res;
+  }
+
+map<size_t,size_t> getObs(const vector<complex<double>> &t_pos,
+                          const vector<double> &t_time,
+                          const vector<int> &t_pri,
+                          const py::list &cbr,
+                          const string &assigner)
+  {
+  planck_assert((t_pos.size()==t_time.size())
+              &&(t_pos.size()==t_pri.size()), "vector length mismatch");
+  vector<Target> tgt;
+  for (size_t i=0; i<t_pos.size(); ++i)
+    tgt.emplace_back(t_pos[i],t_time[i],t_pri[i]);
+
+  vector<Cobra> cobras;
+  for (auto i:cbr)
+    cobras.emplace_back(i[py::cast(0)].cast<complex<double>>(),
+                        i[py::cast(1)].cast<double>(),
+                        i[py::cast(2)].cast<double>(),
+                        i[py::cast(3)].cast<complex<double>>(),
+                        i[py::cast(4)].cast<double>());
+
+  vector<size_t> tid, fid;
+  if (!tgt.empty())
+    getObservation(tgt,cobras,assigner,tid,fid);
+  map<size_t,size_t> res;
+  for (size_t i=0; i<tid.size(); ++i)
+    res[tid[i]] = fid[i];
+  return res;
+  }
 
 } // unnamed namespace
 
@@ -128,43 +88,31 @@ PYBIND11_PLUGIN(pyETS)
   py::module m("pyETS",
     "Python interface for some of the ETS C++ functionality");
 
-  py::class_<ETShelper>(m, "ETShelper")
-    .def(py::init<const vector<string>&,const vector<double>&,
-      const vector<double> &, const vector<double> &, const vector<int> &,
-      const map<string,vector<double>> &, double, double, double, string>(),
-      "Args:\n"
-      "  t_id   : Target IDs\n"
-      "  t_ra   : Target rectascensions (in degrees)\n"
-      "  t_dec  : target declinations (in degrees)\n"
-      "  t_time : requested target observation times (in seconds) (unused)\n"
-      "  t_pri  : target priorities\n"
-      "  cbr    : dictionary of cobras\n"
-      "  tel_ra : telescope pointing rectascension (in degrees)\n"
-      "  tel_dec: telescope pointing declination (in degrees)\n"
-      "  posang : telescope position angle (in degrees)\n"
-      "  time   : obervation time in the format 'yyyy-mm-ddThh:mm:ssZ'",
-      "t_id"_a,"t_ra"_a,"t_dec"_a,"t_time"_a,"t_pri"_a,"cbr"_a,"tel_ra"_a,
-      "tel_dec"_a,"posang"_a,"time"_a)
-    .def("getTgtpos", &ETShelper::getTgtpos,
-      "returns the positions (in mm on the PFI plane) of the visible targets")
-    .def("getVis", &ETShelper::getVis,
-      "returns a list of the visible targets and the fibers that can observe them")
-    .def("getObservation", &ETShelper::getObservation,
-      "returns the targets that would be chosen by the provided assigner "
-      "algorithm, as well as the fibers observing them","assigner"_a)
-;
+  m.def("getVis", &getVis,
+    "returns a list of the visible targets and the fibers that can observe them.\n"
+    "Args:\n"
+    "  t_pos  : Target x/y coordinates on the focal plane (in mm)\n"
+    "  cbr    : list of cobras as generated by getAllCobras()\n"
+    "t_pos"_a, "cbr"_a);
+  m.def("getObs", &getObs,
+    "performs an assignment step and returns a dictionary containing the\n"
+    "observed target numbers and the assigned cobra numbers\n"
+    "Args:\n"
+    "  t_pos   : Target x/y coordinates on the focal plane (in mm)\n"
+    "  t_time  : requested target observation times (in seconds) (unused)\n"
+    "  t_pri   : target priorities\n"
+    "  cbr     : list of cobras as generated by getAllCobras()\n"
+    "  assigner: algorithm to do the assignment. Must be one of 'naive',"
+    "            'draining', 'draining_closest' or 'new'\n",
+    "t_pos"_a, "t_time"_a, "t_pri"_a, "cbr"_a, "assigner"_a);
   m.def("getAllCobras", &getAllCobras,
-    "returns a dictionary containing all cobras. A cobra is defined by a\n"
-    "5-tuple of real numbers (unit is mm):\n"
-    "  x position of the cobra center\n"
-    "  y position pf the cobra center\n"
-    "  radius of patrol area\n"
-    "  x position of the dot\n"
-    "  y position of the dot\n"
+    "returns a list containing the parameters of all cobras of an idealized \n"
+    " instrument configuration. The parameters are in turn stored as\n"
+    " 5-element lists of numbers (unit is mm):\n"
+    "  cobra center (complex)\n"
+    "  length l1 (link between center of cobra and 'elbow')\n"
+    "  length l2 (link between 'elbow' and tip\n"
+    "  dot position (complex)\n"
     "  dot radius");
-  m.def("setCollisionDistance", &setCollisionDistance,
-    "Sets the collision distance between cobra tips to dist millimeters.\n"
-    "If dist<=0, no collisions are possible.\n"
-    "Standard collision distance is 2mm.", "dist"_a);
   return m.ptr();
   }

@@ -9,11 +9,25 @@
 #include "vec3.h"
 #include "pointing.h"
 #include "rotmatrix.h"
-#include "astronomy.h"
 
 using namespace std;
 
 namespace {
+
+class eq2hor
+  {
+  private:
+    const double j2000= 2451545.0;
+    const double sec2rad=degr2rad/3600.;
+
+    rotmatrix npmat;
+    double lat, lon, gast, eps, jd, sunlon, altitude;
+
+  public:
+    eq2hor (double lat_obs, double lon_obs, double alt_obs, const std::string &time);
+    pointing radec2altaz (const pointing &radec) const;
+  };
+
 
 double greg2julian (int y, int m, int d)
   {
@@ -278,8 +292,6 @@ void co_aberration2 (double &ra, double &dec, double jd, double sunlon, double e
         vec3(-cosb*sinc, -sinb*sinc, cosc));
       }
 
-} // unnamed namespace
-
     eq2hor::eq2hor (double lat_obs, double lon_obs, double alt_obs, const string &time)
       {
       lat=lat_obs; lon=lon_obs; altitude=alt_obs;
@@ -313,3 +325,51 @@ void co_aberration2 (double &ra, double &dec, double jd, double sunlon, double e
       alt=co_refract(alt,altitude);
       return pointing(halfpi-alt,az);
       }
+
+const double obs_lat=(19+49/60.+32/3600.)*degr2rad,
+                 obs_lon=-(155+28/60.+34/3600.)*degr2rad;
+// Height of the observatory (meters above sea level)
+const double obs_height=4139.;
+vector<complex<double>> targetToPFI(const vector<pointing> &altaz, const pointing &los, double psi)
+  {
+  // altitude and azimuth of North celestial pole:
+  pointing altaz_ncp (halfpi-obs_lat,0.);
+  vec3 z{los}, skypole(altaz_ncp);
+  vec3 x=(skypole-z*dotprod(z,skypole)).Norm();
+  vec3 y=crossprod(z,x);
+  xcomplex<double> cpsi(cos(psi),sin(psi));
+  const double a0=0., a1=-3.2e2, a2=-1.37e1, a3=-7.45e0;
+  vector<xcomplex<double>> res;
+  for (auto&& t:altaz)
+    {
+    vec3 pos(t);
+    vec3 xp=pos-y*dotprod(pos,y);
+    vec3 yp=pos-x*dotprod(pos,x);
+    xcomplex<double> pnew (atan2(dotprod(xp,x),dotprod(xp,z))*rad2degr,
+               atan2(dotprod(yp,y),dotprod(yp,z))*rad2degr);
+    pnew*=cpsi;
+    double rsq=norm(pnew);
+    res.emplace_back((a3*rsq*rsq+a2*rsq+a1)*pnew.real()+a0,
+                 (-a3*rsq*rsq-a2*rsq-a1)*pnew.imag()+a0);
+    }
+  return res;
+  }
+/*! Converts RA/DEC in degrees to colatitude/longitude in radians. */
+inline pointing radec2ptg (double ra, double dec)
+  { return pointing((90-dec)*degr2rad,ra*degr2rad); }
+
+} // unnamed namespace
+
+vector<complex<double>> cconv (const vector<double> &ra, const vector<double> &dec,
+  double tel_ra, double tel_dec, double psi, const string &time)
+  {
+  vector<pointing> t0;
+  for (size_t i=0; i<ra.size(); ++i)
+    t0.emplace_back(radec2ptg(ra[i],dec[i]));
+  eq2hor eqtest(obs_lat, obs_lon, obs_height, time);
+  for (auto &t:t0)
+    t=eqtest.radec2altaz(t);
+  vector<complex<double>> res;
+
+  return targetToPFI(t0,eqtest.radec2altaz(radec2ptg(tel_ra,tel_dec)),psi*degr2rad);
+  }

@@ -1,4 +1,6 @@
-from pyETS import *
+import numpy as np
+import pyETS
+import pycconv
 
 def readTargets(fname):
     with open(fname) as f:
@@ -17,17 +19,35 @@ def readTargets(fname):
                 decs.append(dec)
                 times.append(time)
                 pris.append(pri)
-    return ids,ras,decs,times,pris
+    return ids, ras, decs, times, pris
+
+# Temporary, very crude method to convert Ra/Dec pairs to x/y coordinates
+# on the focal plane. To be replaced by the official functionality once
+# available.
+# All input angles are expected in degrees.
+def radec2pos(ras, decs, raTel=None, decTel=None, posang=0.,
+              time="2016-04-03T08:00:00Z"):
+    if raTel is None:
+        raTel = np.average(ras)
+    if decTel is None:
+        decTel = np.average(decs)
+    return pycconv.cconv(ras,decs,raTel,decTel,posang,time)
+
+# get a data structure containing the idealized cobras
+cobras = pyETS.getAllCobras()
 
 # Parse a target file and return the quantities of interest
-ids,ras,decs,times,pris = readTargets("cosmology.dat")
-
-# Initialize the ETS class with target data, telescope pointing and observation time
-ets=ETShelper(ids,ras,decs,times,pris,getAllCobras(),33.5, -4.,0,"2016-04-03T08:00:00Z")
+ids,ras,decs,times,pris = readTargets("data/ets_test_data.dat")
+pos = radec2pos(ras,decs)
 
 # get a list of targets, and a list of Cobras that can observe them
-visibility_map=ets.getVis()
+visibility_map=pyETS.getVis(pos,cobras)
 
-# perform target asignment using the "draining" algorithm, and return the list
+# perform target assignment using the "draining" algorithm, and return the list
 # of assigned targets and which cobras were used to observe them.
-res=ets.getObservation("draining")
+res=pyETS.getObs(pos,times,pris,cobras,"draining_closest")
+
+print "TargetID   Cobra  X         Y          RA         Dec"
+for i in range(len(res.keys())):
+    idx = res.keys()[i]
+    print "%s %6i %10.5f %10.5f %10.5f %10.5f" % (ids[idx], res.values()[i]+1, pos[idx].real, pos[idx].imag, ras[idx], decs[idx])
