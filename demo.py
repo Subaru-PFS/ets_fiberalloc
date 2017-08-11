@@ -46,3 +46,8 @@ visibility_map=pyETS.getVis(pos,cobras)
 # perform target assignment using the "draining" algorithm, and return the list
 # of assigned targets and which cobras were used to observe them.
 res=pyETS.getObs(pos,times,pris,cobras,"draining_closest")
+
+print "TargetID   Cobra  X         Y          RA         Dec"
+for i in range(len(res.keys())):
+    idx = res.keys()[i]
+    print "%s %6i %10.5f %10.5f %10.5f %10.5f" % (ids[idx], res.values()[i]+1, pos[idx].real, pos[idx].imag, ras[idx], decs[idx])
