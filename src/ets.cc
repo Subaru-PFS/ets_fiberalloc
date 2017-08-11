@@ -649,7 +649,7 @@ void getObservation (const std::vector<Target> &targets,
   else if (algorithm=="draining_closest")
     DrainingClosestAssigner dummy(targets,cobras,tid,cid);
   else if (algorithm=="new")
-    DrainingClosestAssigner dummy(targets,cobras,tid,cid);
+    NewAssigner dummy(targets,cobras,tid,cid);
   else
     planck_fail("unknown assignment algorithm");
   }
