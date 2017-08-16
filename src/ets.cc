@@ -238,9 +238,9 @@ class ETS_data
       // remove target
       for (auto j : t2f[itgt]) stripout(f2t[j],itgt);
       t2f[itgt].clear();
-      // remove everything in "lower arm" area of the assigned cobra
       if (colldist>0.)
         {
+        // remove everything in "lower arm" area of the assigned cobra
         vec2 tippos (tgt[itgt].pos),
              elbowpos(elbow_pos(cbr[fiber], tippos));
         std::vector<size_t> tmp=rtgt.query(0.5*(tippos+elbowpos),
@@ -262,7 +262,9 @@ class ETS_data
             {
             vec2 tippos2 (tgt[j].pos),
                  elbowpos2(elbow_pos(cbr[i], tippos2));
-            if (line_segment_collision (elbowpos, tippos, elbowpos2, colldist))
+            if (line_segment_collision (elbowpos, tippos, elbowpos2, colldist)
+              ||line_segment_collision (elbowpos2, tippos2, elbowpos, colldist)
+              ||line_segment_collision (elbowpos2, tippos2, tippos, colldist))
               {
               stripout(f2t[i],j);
               stripout(t2f[j],i);
