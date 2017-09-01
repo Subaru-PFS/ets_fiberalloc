@@ -1,8 +1,10 @@
+#!/usr/bin/env python
 import numpy as np
 import pyETS
 import pycconv
 
 def readTargets(fname):
+    print fname
     with open(fname) as f:
         ll=f.readlines()
         ids=[]
@@ -33,21 +35,23 @@ def radec2pos(ras, decs, raTel=None, decTel=None, posang=0.,
         decTel = np.average(decs)
     return pycconv.cconv(ras,decs,raTel,decTel,posang,time)
 
-# get a data structure containing the idealized cobras
-cobras = pyETS.getAllCobras()
-
-# Parse a target file and return the quantities of interest
-ids,ras,decs,times,pris = readTargets("data/ets_test_data.dat")
-pos = radec2pos(ras,decs)
-
-# get a list of targets, and a list of Cobras that can observe them
-visibility_map=pyETS.getVis(pos,cobras)
-
-# perform target assignment using the "draining" algorithm, and return the list
-# of assigned targets and which cobras were used to observe them.
-res=pyETS.getObs(pos,times,pris,cobras,"draining_closest")
-
-print "TargetID   Cobra  X         Y          RA         Dec"
-for i in range(len(res.keys())):
-    idx = res.keys()[i]
-    print "%s %6i %10.5f %10.5f %10.5f %10.5f" % (ids[idx], res.values()[i]+1, pos[idx].real, pos[idx].imag, ras[idx], decs[idx])
+if __name__ == '__main__':
+    # get a data structure containing the idealized cobras
+    cobras = pyETS.getAllCobras()
+    
+    # Parse a target file and return the quantities of interest
+    ids,ras,decs,times,pris = readTargets("data/ets_test_data.dat")
+    pos = radec2pos(ras,decs)
+    
+    # get a list of targets, and a list of Cobras that can observe them
+    visibility_map=pyETS.getVis(pos,cobras)
+    
+    # perform target assignment using the "draining" algorithm, and return the list
+    # of assigned targets and which cobras were used to observe them.
+    res=pyETS.getObs(pos,times,pris,cobras,"draining_closest")
+    
+    print "TargetID   Cobra  X         Y          RA         Dec"
+    for i in range(len(res.keys())):
+        idx = res.keys()[i]
+        print "%s %6i %10.5f %10.5f %10.5f %10.5f" % (ids[idx], res.values()[i]+1, pos[idx].real, pos[idx].imag, ras[idx], decs[idx])
+    
