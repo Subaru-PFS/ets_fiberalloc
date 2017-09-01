@@ -20,10 +20,10 @@ py::list getAllCobras()
   for (size_t i=0; i<ncb; ++i)
     {
     auto tmp = py::list();
-    tmp.append(py::cast(complex<double>(c[i].center.x(),c[i].center.y())));
+    tmp.append(py::cast(complex<double>(c[i].center)));
     tmp.append(py::cast(c[i].l1));
     tmp.append(py::cast(c[i].l2));
-    tmp.append(py::cast(complex<double>(c[i].dotpos.x(),c[i].dotpos.y())));
+    tmp.append(py::cast(complex<double>(c[i].dotpos)));
     tmp.append(py::cast(c[i].rdot));
     res.append(tmp);
     }
@@ -39,11 +39,14 @@ map<size_t,vector<size_t>> getVis(const vector<complex<double>> &t_pos,
 
   vector<Cobra> cobras;
   for (auto i:cbr)
+    {
+    planck_assert(i.cast<py::list>().size()==5,"format mismatch");
     cobras.emplace_back(i[py::cast(0)].cast<complex<double>>(),
                         i[py::cast(1)].cast<double>(),
                         i[py::cast(2)].cast<double>(),
                         i[py::cast(3)].cast<complex<double>>(),
                         i[py::cast(4)].cast<double>());
+    }
   auto tmp = getT2F(tgt,cobras);
   map<size_t,vector<size_t>> res;
   for (size_t i=0; i< tmp.size(); ++i)
@@ -65,11 +68,14 @@ map<size_t,size_t> getObs(const vector<complex<double>> &t_pos,
 
   vector<Cobra> cobras;
   for (auto i:cbr)
+    {
+    planck_assert(i.cast<py::list>().size()==5,"format mismatch");
     cobras.emplace_back(i[py::cast(0)].cast<complex<double>>(),
                         i[py::cast(1)].cast<double>(),
                         i[py::cast(2)].cast<double>(),
                         i[py::cast(3)].cast<complex<double>>(),
                         i[py::cast(4)].cast<double>());
+    }
 
   vector<size_t> tid, fid;
   if (!tgt.empty())
