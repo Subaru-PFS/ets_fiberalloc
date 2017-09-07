@@ -18,6 +18,14 @@ Pybind11 headers for C++/Python integration
 Simply type "make". This requires a fairly recent version of GNU g++ (tested
 with version 5.3 and above, but any 5.x will probably work).
 
+If you can compile the code but you get error messages when trying to import
+the Python modules, chances are that the "python" executable and the Python
+configuration tool "python-config" in your search path don't match; this
+can happen when installing a new Python interpreter from a software repository
+in addition to the one distributed with the system. In this case you can edit
+the Makefile and set the PYTHON_CONFIG variable to the appropriate
+"python-config" with full path.
+
 ## Demo code:
 
 The file demo.py contains a very brief overview over the typical workflow, i.e.
