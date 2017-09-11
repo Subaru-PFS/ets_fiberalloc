@@ -7,7 +7,7 @@ using namespace std;
 vector<complex<double>> cconv (const vector<double> &ra, const vector<double> &dec,
   double tel_ra, double tel_dec, double psi, const string &time);
 
-PYBIND11_MODULE(pycconv)
+PYBIND11_MODULE(pycconv,m)
   {
   namespace py = pybind11;
   using namespace pybind11::literals;
