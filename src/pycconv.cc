@@ -7,12 +7,11 @@ using namespace std;
 vector<complex<double>> cconv (const vector<double> &ra, const vector<double> &dec,
   double tel_ra, double tel_dec, double psi, const string &time);
 
-PYBIND11_PLUGIN(pycconv)
+PYBIND11_MODULE(pycconv)
   {
   namespace py = pybind11;
   using namespace pybind11::literals;
-  py::module m("pycconv",
-    "Python interface for coordinate transforms needed by ETS");
+  m.doc() = "Python interface for coordinate transforms needed by ETS";
 
   m.def("cconv", &cconv,
     "converts Ra/Dec to PFS focal plane coordinates (very crudely)"
@@ -28,5 +27,4 @@ PYBIND11_PLUGIN(pycconv)
     "  a list of complex numbers representing x/y focal plane coordinates\n"
     "  (in mm)",
     "ra"_a, "dec"_a, "tel_ra"_a, "tel_dec"_a, "psi"_a, "time"_a);
-  return m.ptr();
   }

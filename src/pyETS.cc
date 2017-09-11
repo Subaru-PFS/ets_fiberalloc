@@ -88,12 +88,10 @@ map<size_t,size_t> getObs(const vector<complex<double>> &t_pos,
 
 } // unnamed namespace
 
-PYBIND11_PLUGIN(pyETS)
+PYBIND11_MODULE(pyETS,m)
   {
   using namespace pybind11::literals;
-  py::module m("pyETS",
-    "Python interface for some of the ETS C++ functionality");
-
+  m.doc() = "Python interface for some of the ETS C++ functionality";
   m.def("getVis", &getVis,
     "returns a list of the visible targets and the fibers that can observe them.\n"
     "Args:\n"
@@ -120,5 +118,4 @@ PYBIND11_PLUGIN(pyETS)
     "  length l2 (link between 'elbow' and tip\n"
     "  dot position (complex)\n"
     "  dot radius");
-  return m.ptr();
   }
