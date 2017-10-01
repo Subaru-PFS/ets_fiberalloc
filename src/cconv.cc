@@ -363,6 +363,7 @@ inline pointing radec2ptg (double ra, double dec)
 vector<complex<double>> cconv (const vector<double> &ra, const vector<double> &dec,
   double tel_ra, double tel_dec, double psi, const string &time)
   {
+  psi+=90.; // correction to match declination with PFI y-axis
   vector<pointing> t0;
   for (size_t i=0; i<ra.size(); ++i)
     t0.emplace_back(radec2ptg(ra[i],dec[i]));
