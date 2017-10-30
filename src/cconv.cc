@@ -1,7 +1,12 @@
 #include <cmath>
 #include <string>
 #include <memory>
+
+//#define USE_REGEX
+#ifdef USE_REGEX
 #include <regex>
+#endif
+
 #include <array>
 #include "lsconstants.h"
 #include "math_utils.h"
@@ -56,9 +61,20 @@ double gmst2ha (double gmst, double lon, double ra) // time in h, angles in rad
   }
 double iso8601toJD (const std::string &datetime)
   {
+#ifdef USE_REGEX
   regex reg_date(R"foo(^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})Z$)foo");
   std::smatch match;
   planck_assert(regex_search(datetime,match,reg_date),"unknown date format");
+#else
+  vector<string> match(7);
+  match[0]="ERROR";
+  match[1]=datetime.substr(0,4);
+  match[2]=datetime.substr(5,2);
+  match[3]=datetime.substr(8,2);
+  match[4]=datetime.substr(11,2);
+  match[5]=datetime.substr(14,2);
+  match[6]=datetime.substr(17,2);
+#endif
   planck_assert(match.size()==7,"unexpected number of matches");
   double jd0=greg2julian(stringToData<int>(match[1]),
                          stringToData<int>(match[2]),

@@ -13,6 +13,7 @@ PYCCONV_SRC:=src/cconv.cc src/pycconv.cc src/external/*.cc
 
 PYBIND_INC:=src
 PYFLAGS:=$(filter-out -Wstrict-prototypes,$(shell $(PYTHON_CONFIG) --cflags --ldflags))
+PYFLAGS+=-L$(shell $(PYTHON_CONFIG) --prefix)/lib
 
 COMMON_FLAGS:=-O3 -g -fmax-errors=1 -std=c++14 -I src/external -W -Wall
 
