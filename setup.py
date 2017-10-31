@@ -108,7 +108,8 @@ setup(name="ets_fiber_assigner",
       cmdclass={'build_ext': BuildExt},
       ext_modules=ext_modules,
       dependency_links = [],
-      install_requires = ["pybind11>=2.2"],
+      extras_require={'pybind11': 'pybind11>=2.2.1'},
+      install_requires = ["pybind11>=2.2.1"],
       license="GPLv2",
 )
 
