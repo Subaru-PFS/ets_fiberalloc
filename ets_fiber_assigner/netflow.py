@@ -4,15 +4,54 @@ import pyETS
 from collections import defaultdict
 
 
+def _calc_pairs(loc, maxdist):
+    minx = np.min(loc.real)
+    maxx = np.max(loc.real)
+    miny = np.min(loc.imag)
+    maxy = np.max(loc.imag)
+    nbx = int((maxx-minx)/maxdist) + 1
+    nby = int((maxy-miny)/maxdist) + 1
+    bin = [[[] for j in range(nby)] for i in range(nbx)]
+    pair = []
+    for i in range(len(loc)):
+        bx = int((loc[i].real-minx)/maxdist)
+        by = int((loc[i].imag-miny)/maxdist)
+        bin[bx][by].append(i)
+    for bx in range(nbx):
+        for by in range(nby):
+            pos1 = loc[bin[bx][by]]
+            for bx2 in range(max(bx-1, 0), min(bx+2, nbx)):
+                for by2 in range(max(by-1, 0), min(by+2, nby)):
+                    pos2 = loc[bin[bx2][by2]]
+                    dist = np.abs(np.array(np.subtract.outer(np.array(pos1),
+                                                             np.array(pos2))))
+                    for i in range(dist.shape[0]):
+                        for j in range(dist.shape[1]):
+                            if dist[i][j] < maxdist:
+                                i1 = bin[bx][by][i]
+                                i2 = bin[bx2][by2][j]
+                                if i1 < i2:
+                                    pair.append((i1, i2))
+    return pair
+
+
 def _get_visibility(cobras, tpos):
     cbr = [[c.center, c.innerLinkLength, c.outerLinkLength, c.dotcenter,
             c.rdot] for c in cobras]
-
     return pyETS.getVis(tpos, cbr)
 
 
+def _get_colliding_pairs(tpos, vis, dist):
+    t_vis = list(vis.keys())
+    tp2 = np.array([tpos[i] for i in t_vis])
+    p1 = _calc_pairs(tp2, dist)
+    p2 = [(t_vis[i[0]], t_vis[i[1]]) for i in p1]
+    return p2
+
+
 def _build_network(cobras, targets, tpos, classdict, tvisit, vis_cost=None,
-                   cobraMoveCost=None, gurobi=False):
+                   cobraMoveCost=None, collision_distance=0.,
+                   gurobi=False):
     Cv_i = defaultdict(list)  # Cobra visit inflows
     Tv_o = defaultdict(list)  # Target visit outflows
     Tv_i = defaultdict(list)  # Target visit inflows
@@ -119,16 +158,30 @@ def _build_network(cobras, targets, tpos, classdict, tvisit, vis_cost=None,
                 f = newvar(0, 1)
                 Cv_i[(cidx, ivis)].append(f)
                 Tv_o[(tidx, ivis)].append((f, cidx))
-                cost += f*vis_cost[ivis]
+                tcost = vis_cost[ivis]
                 if cobraMoveCost is not None:
                     dist = np.abs(cobras[cidx].center-tpos[ivis][tidx])
-                    cost += f*cobraMoveCost(dist)
+                    tcost += cobraMoveCost(dist)
+                cost += f*tcost
 
     if gurobi:
         prob.setObjective(cost)
     else:
         prob += cost
+
     # Constraints
+
+    # avoid endpoint collisions
+    if collision_distance>0.:
+        for ivis in range(nvisits):
+            cpair = _get_colliding_pairs(tpos[ivis], vis[ivis],
+                                         collision_distance)
+            keys = Tv_o.keys()
+            for p in cpair:
+                if (p[0], ivis) in keys and (p[1], ivis) in keys:
+                    flows = [v[0] for v in
+                             Tv_o[(p[0], ivis)] + Tv_o[(p[1], ivis)]]
+                    add_constraint(prob, lpSum(flows) <= 1)
 
     # every Cobra can observe at most one target per visit
     for inflow in Cv_i.values():
@@ -176,9 +229,10 @@ def _build_network(cobras, targets, tpos, classdict, tvisit, vis_cost=None,
 
 
 def observeWithNetflow(cbr, tgt, tpos, classdict, tvisit, vis_cost=None,
-                       cobraMoveCost=None, gurobi=False):
+                       cobraMoveCost=None, collision_distance=0.,
+                       gurobi=False):
     return _build_network(cbr, tgt, tpos, classdict, tvisit, vis_cost,
-                          cobraMoveCost, gurobi)
+                          cobraMoveCost, collision_distance, gurobi)
 
 
 class Cobra(object):
