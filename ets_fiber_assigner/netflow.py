@@ -11,7 +11,8 @@ def _get_visibility(cobras, tpos):
     return pyETS.getVis(tpos, cbr)
 
 
-def _build_network(cobras, targets, tpos, classdict, tvisit, vis_cost=None, cobraMoveCost=None, gurobi=False):
+def _build_network(cobras, targets, tpos, classdict, tvisit, vis_cost=None,
+                   cobraMoveCost=None, gurobi=False):
     Cv_i = defaultdict(list)  # Cobra visit inflows
     Tv_o = defaultdict(list)  # Target visit outflows
     Tv_i = defaultdict(list)  # Target visit inflows
@@ -24,8 +25,10 @@ def _build_network(cobras, targets, tpos, classdict, tvisit, vis_cost=None, cobr
         prob = gbp.Model("problem")
         cost = prob.addVar(vtype=gbp.GRB.CONTINUOUS, name="cost")
         lpSum = gbp.quicksum
+
         def add_constraint(problem, constraint):
             problem.addConstr(constraint)
+
         def varValue(var):
             return var.X
     else:
@@ -33,8 +36,10 @@ def _build_network(cobras, targets, tpos, classdict, tvisit, vis_cost=None, cobr
         prob = pulp.LpProblem("problem", pulp.LpMinimize)
         cost = pulp.LpVariable("cost", 0)
         lpSum = pulp.lpSum
+
         def add_constraint(problem, constraint):
             problem += constraint
+
         def varValue(var):
             return pulp.value(var)
 
@@ -59,9 +64,12 @@ def _build_network(cobras, targets, tpos, classdict, tvisit, vis_cost=None, cobr
             if hi is None:
                 hi = gbp.GRB.INFINITY
             if lo == 0 and hi == 1:
-               return prob.addVar(vtype=gbp.GRB.BINARY, name="v{}".format(newvar._varcount))
+                return prob.addVar(vtype=gbp.GRB.BINARY,
+                                   name="v{}".format(newvar._varcount))
             else:
-               return prob.addVar(vtype=gbp.GRB.INTEGER, name="v{}".format(newvar._varcount), lb=lo, ub=hi)
+                return prob.addVar(vtype=gbp.GRB.INTEGER,
+                                   name="v{}".format(newvar._varcount),
+                                   lb=lo, ub=hi)
         else:
             return pulp.LpVariable("v{}".format(newvar._varcount), lo, hi,
                                    cat=pulp.LpInteger)
@@ -73,7 +81,7 @@ def _build_network(cobras, targets, tpos, classdict, tvisit, vis_cost=None, cobr
     for key, value in classdict.items():
         if value["calib"]:
             for ivis in range(nvisits):
-                f = newvar(0,None)
+                f = newvar(0, None)
                 CTCv_o[(key, ivis)].append(f)
                 cost += f*value["nonObservationCost"]
 
@@ -119,7 +127,7 @@ def _build_network(cobras, targets, tpos, classdict, tvisit, vis_cost=None, cobr
     if gurobi:
         prob.setObjective(cost)
     else:
-        prob+=cost
+        prob += cost
     # Constraints
 
     # every Cobra can observe at most one target per visit
@@ -129,19 +137,21 @@ def _build_network(cobras, targets, tpos, classdict, tvisit, vis_cost=None, cobr
     # every calibration target class must be observed a minimum number of times
     # every visit
     for key, value in CTCv_o.items():
-        add_constraint(prob, lpSum([v for v in value]) >= \
-                classdict[key[0]]["numRequired"])
+        add_constraint(prob, lpSum([v for v in value]) >=
+                       classdict[key[0]]["numRequired"])
 
     # inflow and outflow at every Tv node must be balanced
     for key, ival in Tv_i.items():
         oval = Tv_o[key]
-        add_constraint(prob, lpSum([v for v in ival]+[-v[0] for v in oval]) == 0)
+        add_constraint(prob,
+                       lpSum([v for v in ival]+[-v[0] for v in oval]) == 0)
 
     # inflow and outflow at every T node must be balanced
     for key, ival in T_i.items():
         oval = T_o[key]
         nvis = nreqvisit[key]
-        add_constraint(prob, lpSum([nvis*v for v in ival]+[-v for v in oval]) == 0)
+        add_constraint(prob,
+                       lpSum([nvis*v for v in ival]+[-v for v in oval]) == 0)
 
     # Science targets must be either observed or go to the sink
     for key, val in STC_o.items():
@@ -164,8 +174,11 @@ def _build_network(cobras, targets, tpos, classdict, tvisit, vis_cost=None, cobr
                 res[ivis][tidx] = cidx
     return res
 
-def observeWithNetflow(cbr, tgt, tpos, classdict, tvisit, vis_cost=None, cobraMoveCost=None, gurobi=False):
-    return _build_network(cbr, tgt, tpos, classdict, tvisit, vis_cost, cobraMoveCost, gurobi)
+
+def observeWithNetflow(cbr, tgt, tpos, classdict, tvisit, vis_cost=None,
+                       cobraMoveCost=None, gurobi=False):
+    return _build_network(cbr, tgt, tpos, classdict, tvisit, vis_cost,
+                          cobraMoveCost, gurobi)
 
 
 class Cobra(object):
@@ -372,20 +385,26 @@ import matplotlib.lines as mlines
 from matplotlib import patches as mpatches
 from matplotlib import collections
 
-def _plot_cobra(c, patches, facecolor='none', edgecolor='black', plot_dot=False):
-    x, y, r = c.center.real, c.center.imag, c.innerLinkLength + c.outerLinkLength
-    circle = mpatches.Circle((x, y), r, facecolor=facecolor, edgecolor=edgecolor, lw=1.)
+
+def _plot_cobra(c, patches, facecolor='none', edgecolor='black',
+                plot_dot=False):
+    x, y, r = (c.center.real, c.center.imag,
+               c.innerLinkLength + c.outerLinkLength)
+    circle = mpatches.Circle((x, y), r, facecolor=facecolor,
+                             edgecolor=edgecolor, lw=1.)
     patches.append(circle)
     if plot_dot:
         x, y, r = c.dotcenter.real, c.dotcenter.imag, c.rdot
-        circle = mpatches.Circle((x, y), r, facecolor=facecolor, edgecolor=edgecolor, lw=1.)
+        circle = mpatches.Circle((x, y), r, facecolor=facecolor,
+                                 edgecolor=edgecolor, lw=1.)
         patches.append(circle)
 
-def plot_assignment(cobras,targets,tpos,res):
+
+def plot_assignment(cobras, targets, tpos, res):
     fig = plt.figure(figsize=[15, 15])
     ax = plt.subplot(111)  # note we must use plt.subplots, not plt.subplot
     patches = []
-    Rmax=0.
+    Rmax = 0.
     for tidx, cidx in res.items():
         c = cobras[cidx]
         Rmax = max(Rmax, np.abs(c.center)+c.innerLinkLength+c.outerLinkLength)
@@ -395,7 +414,7 @@ def plot_assignment(cobras,targets,tpos,res):
         _plot_cobra(c, patches, edgecolor=color)
         x, y = c.center.real, c.center.imag
         tx, ty = tp.real, tp.imag
-        line = mlines.Line2D([x, tx], [y, ty], lw=1, color= color)
+        line = mlines.Line2D([x, tx], [y, ty], lw=1, color=color)
         ax.add_line(line)
     collection = collections.PatchCollection(patches, match_original=True)
     ax.add_collection(collection)
