@@ -1,4 +1,4 @@
-from setuptools import setup, Extension
+from setuptools import setup, Extension, find_packages
 from setuptools.command.build_ext import build_ext
 import sys
 import setuptools
@@ -103,7 +103,7 @@ setup(name="ets_fiber_assigner",
       author="Martin Reinecke",
       author_email="martin@mpa-garching.mpg.de",
       description="Fiber assignment code for the PFS instrument",
-      packages=[],
+      packages=find_packages(include=["ets_fiber_assigner", "ets_fiber_assigner.*"]),
       zip_safe=False,
       cmdclass={'build_ext': BuildExt},
       ext_modules=ext_modules,
