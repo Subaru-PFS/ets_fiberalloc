@@ -1,57 +1,49 @@
 import numpy as np
 import pycconv
-import pyETS
 from collections import defaultdict
 
 
-def _calc_pairs(loc, maxdist):
-    minx = np.min(loc.real)
-    maxx = np.max(loc.real)
-    miny = np.min(loc.imag)
-    maxy = np.max(loc.imag)
-    nbx = int((maxx-minx)/maxdist) + 1
-    nby = int((maxy-miny)/maxdist) + 1
-    bin = [[[] for j in range(nby)] for i in range(nbx)]
-    pair = []
-    for i in range(len(loc)):
-        bx = int((loc[i].real-minx)/maxdist)
-        by = int((loc[i].imag-miny)/maxdist)
-        bin[bx][by].append(i)
-    for bx in range(nbx):
-        for by in range(nby):
-            pos1 = loc[bin[bx][by]]
-            for bx2 in range(max(bx-1, 0), min(bx+2, nbx)):
-                for by2 in range(max(by-1, 0), min(by+2, nby)):
-                    pos2 = loc[bin[bx2][by2]]
-                    dist = np.abs(np.array(np.subtract.outer(np.array(pos1),
-                                                             np.array(pos2))))
-                    for i in range(dist.shape[0]):
-                        for j in range(dist.shape[1]):
-                            if dist[i][j] < maxdist:
-                                i1 = bin[bx][by][i]
-                                i2 = bin[bx2][by2][j]
-                                if i1 < i2:
-                                    pair.append((i1, i2))
-    return pair
+def _get_visibility(bench, tpos):
+    from cobraOps.TargetGroup import TargetGroup
+    from cobraOps.TargetSelector import TargetSelector
+    tgroup = TargetGroup(np.array(tpos))
+    tselect = TargetSelector(bench, tgroup)
+    tselect.calculateAccessibleTargets()
+    tmp = tselect.accessibleTargetIndices
+    res = defaultdict(list)
 
+    for cbr in range(tmp.shape[0]):
+        for tidx in tmp[cbr,:]:
+            if tidx >= 0:
+                res[tidx].append(cbr)
+    return res
 
-def _get_visibility(cobras, tpos):
-    cbr = [[c.center, c.innerLinkLength, c.outerLinkLength, c.dotcenter,
-            c.rdot] for c in cobras]
-    return pyETS.getVis(tpos, cbr)
+def _get_colliding_pairs(bench, tpos, vis, dist):
+    tpos = np.array(tpos)
+    ivis = defaultdict(list)
+    for tidx, cbr in vis.items():
+        for cidx in cbr:
+            ivis[cidx].append(tidx)
 
+    pairs = set()
+    for cidx, i1 in ivis.items():
+        nb = bench.getCobraNeighbors(cidx)
+        i2 = list(i1)
+        i2 = np.concatenate([ivis[j] for j in nb if j in ivis])
+        i2 = np.concatenate((i1, i2))
+        i2 = np.unique(i2).astype(np.int)
+        d = np.abs(np.subtract.outer(tpos[i1], tpos[i2]))
+        for m in range(d.shape[0]):
+            for n in range(d.shape[1]):
+                if d[m][n] < dist:
+                    if i1[m] < i2[n]:
+                        pairs.add((i1[m], i2[n]))
 
-def _get_colliding_pairs(tpos, vis, dist):
-    t_vis = list(vis.keys())
-    tp2 = np.array([tpos[i] for i in t_vis])
-    p1 = _calc_pairs(tp2, dist)
-    p2 = [(t_vis[i[0]], t_vis[i[1]]) for i in p1]
-    return p2
+    return pairs
 
-
-def _build_network(cobras, targets, tpos, classdict, tvisit, vis_cost=None,
-                   cobraMoveCost=None, collision_distance=0.,
-                   gurobi=False):
+def observeWithNetflow(bench, targets, tpos, classdict, tvisit, vis_cost=None,
+                        cobraMoveCost=None, collision_distance=0.,
+                        gurobi=False):
     Cv_i = defaultdict(list)  # Cobra visit inflows
     Tv_o = defaultdict(list)  # Target visit outflows
     Tv_i = defaultdict(list)  # Target visit inflows
@@ -89,7 +81,7 @@ def _build_network(cobras, targets, tpos, classdict, tvisit, vis_cost=None,
         else:
             nreqvisit.append(0)
 
-    vis = [_get_visibility(cobras, tp) for tp in tpos]
+    vis = [_get_visibility(bench, tp) for tp in tpos]
     nvisits = len(vis)
 
     if vis_cost is None:
@@ -160,7 +152,7 @@ def _build_network(cobras, targets, tpos, classdict, tvisit, vis_cost=None,
                 Tv_o[(tidx, ivis)].append((f, cidx))
                 tcost = vis_cost[ivis]
                 if cobraMoveCost is not None:
-                    dist = np.abs(cobras[cidx].center-tpos[ivis][tidx])
+                    dist = np.abs(bench.cobras.centers[cidx]-tpos[ivis][tidx])
                     tcost += cobraMoveCost(dist)
                 cost += f*tcost
 
@@ -174,11 +166,12 @@ def _build_network(cobras, targets, tpos, classdict, tvisit, vis_cost=None,
     # avoid endpoint collisions
     if collision_distance>0.:
         for ivis in range(nvisits):
-            cpair = _get_colliding_pairs(tpos[ivis], vis[ivis],
+            cpair = _get_colliding_pairs(bench, tpos[ivis], vis[ivis],
                                          collision_distance)
             keys = Tv_o.keys()
+            keys = set(key[0] for key in keys if key[1]==ivis)
             for p in cpair:
-                if (p[0], ivis) in keys and (p[1], ivis) in keys:
+                if p[0] in keys and p[1] in keys:
                     flows = [v[0] for v in
                              Tv_o[(p[0], ivis)] + Tv_o[(p[1], ivis)]]
                     add_constraint(prob, lpSum(flows) <= 1)
@@ -228,59 +221,6 @@ def _build_network(cobras, targets, tpos, classdict, tvisit, vis_cost=None,
     return res
 
 
-def observeWithNetflow(cbr, tgt, tpos, classdict, tvisit, vis_cost=None,
-                       cobraMoveCost=None, collision_distance=0.,
-                       gurobi=False):
-    return _build_network(cbr, tgt, tpos, classdict, tvisit, vis_cost,
-                          cobraMoveCost, collision_distance, gurobi)
-
-
-class Cobra(object):
-    """An object holding all relevant information describing a single Cobra
-    positioner.
-    This includes center position, black dot position, black dot radius, and
-    inner and outer link lengths.
-    All lengths in mm, positions are stored as complex numbers.
-    """
-    def __init__(self, ID, center, dotcenter, rdot, li, lo):
-        self._ID = str(ID)
-        self._center = complex(center)
-        self._dotcenter = complex(dotcenter)
-        self._rdot = float(rdot)
-        self._innerLinkLength = float(li)
-        self._outerLinkLength = float(lo)
-
-    @property
-    def ID(self):
-        """ID of the object : str"""
-        return self._ID
-
-    @property
-    def center(self):
-        """position of Cobra center in the focal plane : pos"""
-        return self._center
-
-    @property
-    def dotcenter(self):
-        """position of dot center in the focal plane : pos"""
-        return self._dotcenter
-
-    @property
-    def rdot(self):
-        """dot radius : float"""
-        return self._rdot
-
-    @property
-    def innerLinkLength(self):
-        """length of the inner link : float"""
-        return self._innerLinkLength
-
-    @property
-    def outerLinkLength(self):
-        """length of the outer link : float"""
-        return self._outerLinkLength
-
-
 class Telescope(object):
     """An object describing a telescope configuration to be used for observing
     a target field. Includes a list of Cobras, telescope RA/Dec and position
@@ -290,27 +230,11 @@ class Telescope(object):
     compute assignment strategies using different algorithms (currently network
     flow and ETs approaches).
     """
-    def __init__(self, Cobras, collisionRadius, ra, dec, posang, time):
-        self._Cobras = tuple(Cobras)
-        self._cobraCollisionRadius = float(collisionRadius)
+    def __init__(self, ra, dec, posang, time):
         self._ra = float(ra)
         self._dec = float(dec)
         self._posang = float(posang)
         self._time = str(time)
-
-    @property
-    def Cobras(self):
-        """return all Cobras : tuple(Cobra) or list(Cobra)"""
-        return self._Cobras
-
-    @property
-    def cobraCollisionRadius(self):
-        """the radius of a Cobra tip : float
-        This is used for collision detection. It could also become a property
-        of each individual Cobra, but apparently this quantity is not very
-        variable.
-        """
-        return self._cobraCollisionRadius
 
     def subtract_obs_time(self, tgt, obs, tvisit):
         res = []
@@ -440,33 +364,34 @@ from matplotlib import patches as mpatches
 from matplotlib import collections
 
 
-def _plot_cobra(c, patches, facecolor='none', edgecolor='black',
-                plot_dot=False):
-    x, y, r = (c.center.real, c.center.imag,
-               c.innerLinkLength + c.outerLinkLength)
+def _plot_cobra(c, crmax, dotcenter, rdot, patches, facecolor='none',
+                edgecolor='black', plot_dot=False):
+    x, y, r = (c.real, c.imag, crmax)
     circle = mpatches.Circle((x, y), r, facecolor=facecolor,
                              edgecolor=edgecolor, lw=1.)
     patches.append(circle)
     if plot_dot:
-        x, y, r = c.dotcenter.real, c.dotcenter.imag, c.rdot
+        x, y, r = dotcenter.real, dotcenter.imag, rdot
         circle = mpatches.Circle((x, y), r, facecolor=facecolor,
                                  edgecolor=edgecolor, lw=1.)
         patches.append(circle)
 
 
-def plot_assignment(cobras, targets, tpos, res):
+def plot_assignment(bench, targets, tpos, res):
     fig = plt.figure(figsize=[15, 15])
     ax = plt.subplot(111)  # note we must use plt.subplots, not plt.subplot
     patches = []
     Rmax = 0.
     for tidx, cidx in res.items():
-        c = cobras[cidx]
-        Rmax = max(Rmax, np.abs(c.center)+c.innerLinkLength+c.outerLinkLength)
+        c = bench.cobras.centers[cidx]
+        crmax = bench.cobras.rMax[cidx]
+        Rmax = max(Rmax, np.abs(c)+crmax)
         tp = tpos[tidx]
         t = targets[tidx]
         color = "red" if isinstance(t, ScienceTarget) else "green"
-        _plot_cobra(c, patches, edgecolor=color)
-        x, y = c.center.real, c.center.imag
+        _plot_cobra(c, crmax, c+bench.cobras.blackDotPosition[cidx],
+                    bench.cobras.blackDotRadius[cidx], patches, edgecolor=color)
+        x, y = c.real, c.imag
         tx, ty = tp.real, tp.imag
         line = mlines.Line2D([x, tx], [y, ty], lw=1, color=color)
         ax.add_line(line)

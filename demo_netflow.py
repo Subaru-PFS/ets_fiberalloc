@@ -1,5 +1,8 @@
 import ets_fiber_assigner.netflow as nf
 import numpy as np
+from cobraOps.Bench import Bench
+from cobraOps.TargetGroup import TargetGroup
+from cobraOps.TargetSelector import TargetSelector
 
 # make runs reproducible
 np.random.seed(20)
@@ -20,12 +23,7 @@ tgt = nf.readScientificFromFile(fscience_targets, "sci")
 #tgt += dm.readCalibrationFromFile(fsky_pos, "sky")
 
 # get a complete, idealized focal plane configuration
-cobras = nf.getFullFocalPlane()
-
-Rmax = 100.  # radius of the reduced focal plane
-
-# build reduced Cobra list to speed up calculation
-cobras = [c for c in cobras if abs(c.center) < Rmax]
+bench = Bench(layout="full")
 
 
 # point the telescope at the center of all science targets
@@ -35,11 +33,11 @@ otime = "2016-04-03T08:00:00Z"
 telescopes = []
 
 # number of distinct observations
-nvisit = 3
+nvisit = 18
 
 # generate randomly jittered telescope pointings for every observation
 for _ in range(nvisit):
-    telescopes.append(nf.Telescope(cobras, 1., raTel+np.random.normal()*1e-2,
+    telescopes.append(nf.Telescope(raTel+np.random.normal()*1e-2,
                       decTel+np.random.normal()*1e-2, posang, otime))
 
 # get focal plane positions for all targets and all visits
@@ -78,10 +76,10 @@ def cobraMoveCost(dist):
     return 5.*dist
 
 # compute observation strategy
-res = nf.observeWithNetflow(telescopes[0].Cobras, tgt, tpos, classdict, 900.,
-                            vis_cost, cobraMoveCost=cobraMoveCost,
-                            collision_distance=2., gurobi=False)
+res = nf.observeWithNetflow(bench, tgt, tpos, classdict, 900.,
+                            vis_cost, cobraMoveCost=None,#cobraMoveCost,
+                            collision_distance=2., gurobi=True)
 
 # plot assignments for every observation
 for vis, tp in zip(res, tpos):
-    nf.plot_assignment(cobras, tgt, tp, vis)
+    nf.plot_assignment(bench, tgt, tp, vis)
