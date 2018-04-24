@@ -13,7 +13,7 @@ fscience_targets = catalog_path+"ets_test_data.dat"
 #fcal_stars       = catalog_path+"/ets_test_data_fcstars.dat"
 #fsky_pos         = catalog_path+"/ets_test_data_sky.dat"
 
-# read all targets into a sigle list, giving them their proper types
+# read all targets into a single list, giving them their proper types
 tgt = nf.readScientificFromFile(fscience_targets, "sci")
 # add calibration targets
 #tgt += dm.readCalibrationFromFile(fcal_stars, "cal")
