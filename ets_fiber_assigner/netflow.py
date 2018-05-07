@@ -220,7 +220,6 @@ def observeWithNetflow(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                 elbowcoll = _get_elbow_collisions(bench, tpos[ivis], tmp,
                                                   collision_distance)
                 for (cidx, tidx1), tidx2 in elbowcoll.items():
-                    print len(tidx2)
                     for idx2 in tidx2:
                         flows = []
                         for arc in Tv_o[(tidx1, ivis)]:
