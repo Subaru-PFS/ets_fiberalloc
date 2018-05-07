@@ -3,6 +3,10 @@ import numpy as np
 from cobraOps.Bench import Bench
 from cobraOps.TargetGroup import TargetGroup
 from cobraOps.TargetSelector import TargetSelector
+from cobraOps.CobrasCalibrationProduct import CobrasCalibrationProduct
+from cobraOps.CollisionSimulator import CollisionSimulator
+from cobraOps.cobraConstants import NULL_TARGET_POSITION, NULL_TARGET_ID
+from cobraOps import plotUtils
 
 # make runs reproducible
 np.random.seed(20)
@@ -24,6 +28,7 @@ tgt = nf.readScientificFromFile(fscience_targets, "sci")
 
 # get a complete, idealized focal plane configuration
 bench = Bench(layout="full")
+#bench = Bench(calibrationProduct=CobrasCalibrationProduct("../ics_cobraOps/matlab/Target_Lists/collding1.5newnew/updatedCentersandHardstops.xml"))
 
 
 # point the telescope at the center of all science targets
@@ -81,6 +86,28 @@ res = nf.observeWithNetflow(bench, tgt, tpos, classdict, 900.,
                             collision_distance=2., elbow_collisions=True,
                             gurobi=True)
 
-# plot assignments for every observation
 for vis, tp in zip(res, tpos):
-    nf.plot_assignment(bench, tgt, tp, vis)
+    selectedTargets = np.full(len(bench.cobras.centers), NULL_TARGET_POSITION)
+    ids = np.full(len(bench.cobras.centers), NULL_TARGET_ID)
+    for tidx, cidx in vis.items():
+        selectedTargets[cidx] = tp[tidx]
+        ids[cidx]=""
+    for i in range(selectedTargets.size):
+        if selectedTargets[i]!=NULL_TARGET_POSITION:
+            dist = np.abs(selectedTargets[i]-bench.cobras.centers[i])
+
+    simulator = CollisionSimulator(bench, TargetGroup(selectedTargets, ids))
+    simulator.run()
+    simulator.plotResults(paintFootprints=False)
+    plotUtils.pauseExecution()
+
+    # Animate the trajectory collisions
+    (problematicCobras,) = np.where(simulator.collisions)
+    for cbr in problematicCobras:
+        simulator.animateCobraTrajectory(cbr)
+        plotUtils.pauseExecution()
+
+
+# plot assignments for every observation
+#for vis, tp in zip(res, tpos):
+#    nf.plot_assignment(bench, tgt, tp, vis)
