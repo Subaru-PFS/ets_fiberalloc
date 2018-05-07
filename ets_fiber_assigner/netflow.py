@@ -192,6 +192,8 @@ def observeWithNetflow(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                     tcost += cobraMoveCost(dist)
                 cost += f*tcost
 
+    # NOTE: at least in Pulp, it is important to set the objective funcation
+    # before any of the constraints!
     if gurobi:
         prob.setObjective(cost)
     else:
@@ -218,13 +220,13 @@ def observeWithNetflow(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                 elbowcoll = _get_elbow_collisions(bench, tpos[ivis], tmp,
                                                   collision_distance)
                 for (cidx, tidx1), tidx2 in elbowcoll.items():
-                    if tidx1 in keys:
-                        for idx2 in tidx2:
-                            flows = []
-                            for arc in Tv_o[(tidx1, ivis)]:
-                                if arc[1] == cidx:
-                                    flows.append(arc[0])
-                            flows += [v[0] for v in Tv_o[(idx2, ivis)]]
+                    print len(tidx2)
+                    for idx2 in tidx2:
+                        flows = []
+                        for arc in Tv_o[(tidx1, ivis)]:
+                            if arc[1] == cidx:
+                                flows.append(arc[0])
+                        flows += [v[0] for v in Tv_o[(idx2, ivis)]]
                         add_constraint(prob, lpSum(flows) <= 1)
 
     # every Cobra can observe at most one target per visit
