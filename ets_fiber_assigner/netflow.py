@@ -67,13 +67,17 @@ def _get_elbow_collisions(bench, tpos, vis, dist):
 
     res = defaultdict(list)
     for cidx, thing in epos.items():
+        cpos = bench.cobras.centers[cidx]
         nb = bench.getCobraNeighbors(cidx)
         i2 = np.concatenate([ivis[j] for j in nb if j in ivis])
         i2 = np.unique(i2).astype(np.int)
         for tidx, elbowpos in thing:
-            d = np.abs(elbowpos-tpos[i2])
-            for m in range(len(d)):
-                if d[m] < dist and i2[m] != tidx:
+            ebp = np.full(len(i2), elbowpos)
+            tp = np.full(len(i2), tpos[tidx])
+            ti2 = np.array([tpos[im] for im in i2])
+            d = bench.distancesToLineSegments(ti2, tp, ebp)
+            for m in range(len(i2)):
+                if d[m] < dist:
                     res[(cidx, tidx)].append(i2[m])
     return res
 
