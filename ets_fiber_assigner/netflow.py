@@ -18,6 +18,22 @@ def _get_visibility(bench, tpos):
                 res[tidx].append(cbr)
     return res
 
+def _get_vis_and_elbow(bench, tpos):
+    from cobraOps.TargetGroup import TargetGroup
+    from cobraOps.TargetSelector import TargetSelector
+    tgroup = TargetGroup(np.array(tpos))
+    tselect = TargetSelector(bench, tgroup)
+    tselect.calculateAccessibleTargets()
+    tmp = tselect.accessibleTargetIndices
+    elb = tselect.accessibleTargetElbows
+    res = defaultdict(list)
+
+    for cbr in range(tmp.shape[0]):
+        for i, tidx in enumerate(tmp[cbr,:]):
+            if tidx >= 0:
+                res[tidx].append((cbr, elb[cbr, i]))
+    return res
+
 def _get_colliding_pairs(bench, tpos, vis, dist):
     tpos = np.array(tpos)
     ivis = defaultdict(list)
@@ -28,7 +44,6 @@ def _get_colliding_pairs(bench, tpos, vis, dist):
     pairs = set()
     for cidx, i1 in ivis.items():
         nb = bench.getCobraNeighbors(cidx)
-        i2 = list(i1)
         i2 = np.concatenate([ivis[j] for j in nb if j in ivis])
         i2 = np.concatenate((i1, i2))
         i2 = np.unique(i2).astype(np.int)
@@ -41,9 +56,30 @@ def _get_colliding_pairs(bench, tpos, vis, dist):
 
     return pairs
 
+def _get_elbow_collisions(bench, tpos, vis, dist):
+    tpos = np.array(tpos)
+    ivis = defaultdict(list)
+    epos = defaultdict(list)
+    for tidx, cidx_elbow in vis.items():
+        for thing in cidx_elbow:
+            ivis[thing[0]].append(tidx)
+            epos[thing[0]].append((tidx, thing[1]))
+
+    res = defaultdict(list)
+    for cidx, thing in epos.items():
+        nb = bench.getCobraNeighbors(cidx)
+        i2 = np.concatenate([ivis[j] for j in nb if j in ivis])
+        i2 = np.unique(i2).astype(np.int)
+        for tidx, elbowpos in thing:
+            d = np.abs(elbowpos-tpos[i2])
+            for m in range(len(d)):
+                if d[m] < dist and i2[m] != tidx:
+                    res[(cidx, tidx)].append(i2[m])
+    return res
+
 def observeWithNetflow(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                         cobraMoveCost=None, collision_distance=0.,
-                        gurobi=False):
+                        elbow_collisions=True, gurobi=False):
     Cv_i = defaultdict(list)  # Cobra visit inflows
     Tv_o = defaultdict(list)  # Target visit outflows
     Tv_i = defaultdict(list)  # Target visit inflows
@@ -175,6 +211,21 @@ def observeWithNetflow(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                     flows = [v[0] for v in
                              Tv_o[(p[0], ivis)] + Tv_o[(p[1], ivis)]]
                     add_constraint(prob, lpSum(flows) <= 1)
+
+            # elbows
+            if elbow_collisions:
+                tmp = _get_vis_and_elbow(bench, tpos[ivis])
+                elbowcoll = _get_elbow_collisions(bench, tpos[ivis], tmp,
+                                                  collision_distance)
+                for (cidx, tidx1), tidx2 in elbowcoll.items():
+                    if tidx1 in keys:
+                        for idx2 in tidx2:
+                            flows = []
+                            for arc in Tv_o[(tidx1, ivis)]:
+                                if arc[1] == cidx:
+                                    flows.append(arc[0])
+                            flows += [v[0] for v in Tv_o[(idx2, ivis)]]
+                        add_constraint(prob, lpSum(flows) <= 1)
 
     # every Cobra can observe at most one target per visit
     for inflow in Cv_i.values():

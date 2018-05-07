@@ -78,7 +78,8 @@ def cobraMoveCost(dist):
 # compute observation strategy
 res = nf.observeWithNetflow(bench, tgt, tpos, classdict, 900.,
                             vis_cost, cobraMoveCost=None,#cobraMoveCost,
-                            collision_distance=2., gurobi=True)
+                            collision_distance=2., elbow_collisions=True,
+                            gurobi=True)
 
 # plot assignments for every observation
 for vis, tp in zip(res, tpos):
