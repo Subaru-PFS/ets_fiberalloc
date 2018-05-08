@@ -13,18 +13,18 @@ np.random.seed(20)
 
 # define locations of the input files
 catalog_path = "data/"
-fscience_targets = catalog_path+"ets_test_data.dat"
+fscience_targets = catalog_path+"pfs_preliminary_target_cosmology.dat"
 # So far, we only have test data for targets.
 # Once we have files for calibration stars and sky locations, we can add them
 # here.
-#fcal_stars       = catalog_path+"/ets_test_data_fcstars.dat"
-#fsky_pos         = catalog_path+"/ets_test_data_sky.dat"
+fcal_stars       = catalog_path+"pfs_preliminary_target_cosmology_fcstars.dat"
+fsky_pos         = catalog_path+"pfs_preliminary_target_cosmology_sky.dat"
 
 # read all targets into a single list, giving them their proper types
 tgt = nf.readScientificFromFile(fscience_targets, "sci")
 # add calibration targets
-#tgt += dm.readCalibrationFromFile(fcal_stars, "cal")
-#tgt += dm.readCalibrationFromFile(fsky_pos, "sky")
+tgt += nf.readCalibrationFromFile(fcal_stars, "cal")
+tgt += nf.readCalibrationFromFile(fsky_pos, "sky")
 
 # get a complete, idealized focal plane configuration
 bench = Bench(layout="full")
@@ -67,10 +67,10 @@ classdict["sci_P6"] = {"nonObservationCost": 50,
                        "partialObservationCost": 1e9, "calib": False}
 classdict["sci_P7"] = {"nonObservationCost": 40,
                        "partialObservationCost": 1e9, "calib": False}
-#classdict["sky"] = {"numRequired": 2,
-#                    "nonObservationCost": 1000, "calib": True}
-#classdict["cal"] = {"numRequired": 1,
-#                    "nonObservationCost": 1000, "calib": True}
+classdict["sky"] = {"numRequired": 2,
+                    "nonObservationCost": 1000, "calib": True}
+classdict["cal"] = {"numRequired": 1,
+                    "nonObservationCost": 1000, "calib": True}
 
 # optional: slightly increase the cost for later observations,
 # to observe as early as possible
