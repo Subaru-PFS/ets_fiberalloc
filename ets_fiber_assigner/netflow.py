@@ -1,3 +1,4 @@
+from __future__ import print_function
 import numpy as np
 import pycconv
 from collections import defaultdict
@@ -124,6 +125,7 @@ def observeWithNetflow(bench, targets, tpos, classdict, tvisit, vis_cost=None,
         else:
             nreqvisit.append(0)
 
+    print("Calculating visibilities")
     vis = [_get_visibility(bench, tp) for tp in tpos]
     nvisits = len(vis)
 
@@ -151,6 +153,7 @@ def observeWithNetflow(bench, targets, tpos, classdict, tvisit, vis_cost=None,
 
     # define LP variables
 
+    print("Creating network topology")
     # create nodes for every visit and calibration target class
     for key, value in classdict.items():
         if value["calib"]:
@@ -160,6 +163,7 @@ def observeWithNetflow(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                 cost += f*value["nonObservationCost"]
 
     for ivis in range(nvisits):
+        print("  exposure {}".format(ivis))
         for tidx, val in vis[ivis].items():
             tgt = targets[tidx]
             TC = tgt.targetclass
@@ -208,9 +212,12 @@ def observeWithNetflow(bench, targets, tpos, classdict, tvisit, vis_cost=None,
 
     # Constraints
 
+    print("adding constraints")
     # avoid endpoint collisions
     if collision_distance > 0.:
+        print("adding collision constraints")
         for ivis in range(nvisits):
+            print("  exposure {}".format(ivis))
             cpair = _get_colliding_pairs(bench, tpos[ivis], vis[ivis],
                                          collision_distance)
             keys = Tv_o.keys()
@@ -262,6 +269,7 @@ def observeWithNetflow(bench, targets, tpos, classdict, tvisit, vis_cost=None,
     for key, val in STC_o.items():
         add_constraint(prob, lpSum([v for v in val]) == len(val)-1)
 
+    print("solving the problem")
     if gurobi:
         prob.ModelSense = 1  # minimize
         prob.optimize()

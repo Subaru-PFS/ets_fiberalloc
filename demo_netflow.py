@@ -7,6 +7,7 @@ from cobraOps.CobrasCalibrationProduct import CobrasCalibrationProduct
 from cobraOps.CollisionSimulator import CollisionSimulator
 from cobraOps.cobraConstants import NULL_TARGET_POSITION, NULL_TARGET_ID
 from cobraOps import plotUtils
+from collections import defaultdict
 
 # make runs reproducible
 np.random.seed(20)
@@ -39,7 +40,7 @@ otime = "2016-04-03T08:00:00Z"
 telescopes = []
 
 # number of distinct observations
-nvisit = 18
+nvisit = 6
 
 # generate randomly jittered telescope pointings for every observation
 for _ in range(nvisit):
@@ -67,9 +68,9 @@ classdict["sci_P6"] = {"nonObservationCost": 50,
                        "partialObservationCost": 1e9, "calib": False}
 classdict["sci_P7"] = {"nonObservationCost": 40,
                        "partialObservationCost": 1e9, "calib": False}
-classdict["sky"] = {"numRequired": 2,
+classdict["sky"] = {"numRequired": 20,
                     "nonObservationCost": 1000, "calib": True}
-classdict["cal"] = {"numRequired": 1,
+classdict["cal"] = {"numRequired": 5,
                     "nonObservationCost": 1000, "calib": True}
 
 # optional: slightly increase the cost for later observations,
@@ -95,13 +96,19 @@ res = nf.observeWithNetflow(bench, tgt, tpos, classdict, t_obs,
 # write output file
 with open("output.txt", "w") as f:
     for i, (vis, tp, tel) in enumerate(zip(res, tpos, telescopes)):
+        print("exposure {}:".format(i))
+        print("  assigned Cobras: {}".format(len(vis)))
+        tdict = defaultdict(int)
         f.write("# Exposure {}: duration {}s, RA: {}, Dec: {}, PA: {}\n".
                 format(i+1, t_obs, tel._ra, tel._dec, tel._posang))
         f.write("# Target    Fiber          X          Y         RA        DEC\n")
         for tidx, cidx in vis.items():
+            tdict[tgt[tidx].targetclass] += 1
             f.write("{:} {:6d} {:10.5f} {:10.5f} {:10.5f} {:10.5f}\n"
                 .format(tgt[tidx].ID, cidx+1, tp[tidx].real, tp[tidx].imag,
                         tgt[tidx].ra, tgt[tidx].dec))
+        for cls, num in tdict.items():
+            print("   {}: {}".format(cls, num))
 
 for vis, tp in zip(res, tpos):
     selectedTargets = np.full(len(bench.cobras.centers), NULL_TARGET_POSITION)
