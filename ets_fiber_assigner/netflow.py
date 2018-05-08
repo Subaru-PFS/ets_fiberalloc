@@ -126,7 +126,10 @@ def observeWithNetflow(bench, targets, tpos, classdict, tvisit, vis_cost=None,
             nreqvisit.append(0)
 
     print("Calculating visibilities")
-    vis = [_get_visibility(bench, tp) for tp in tpos]
+    vis = []
+    for ivis, tp in enumerate(tpos):
+        print("  exposure {}".format(ivis+1))
+        vis.append(_get_visibility(bench, tp))
     nvisits = len(vis)
 
     if vis_cost is None:
@@ -163,7 +166,7 @@ def observeWithNetflow(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                 cost += f*value["nonObservationCost"]
 
     for ivis in range(nvisits):
-        print("  exposure {}".format(ivis))
+        print("  exposure {}".format(ivis+1))
         for tidx, val in vis[ivis].items():
             tgt = targets[tidx]
             TC = tgt.targetclass
@@ -217,7 +220,7 @@ def observeWithNetflow(bench, targets, tpos, classdict, tvisit, vis_cost=None,
     if collision_distance > 0.:
         print("adding collision constraints")
         for ivis in range(nvisits):
-            print("  exposure {}".format(ivis))
+            print("  exposure {}".format(ivis+1))
             cpair = _get_colliding_pairs(bench, tpos[ivis], vis[ivis],
                                          collision_distance)
             keys = Tv_o.keys()
