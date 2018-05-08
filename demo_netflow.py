@@ -81,19 +81,29 @@ vis_cost = [0.1 + 0.1*i for i in range(nvisit)]
 def cobraMoveCost(dist):
     return 5.*dist
 
+
+# duration of one observation in seconds
+t_obs = 900.
+
 # compute observation strategy
-res = nf.observeWithNetflow(bench, tgt, tpos, classdict, 900.,
+res = nf.observeWithNetflow(bench, tgt, tpos, classdict, t_obs,
                             vis_cost, cobraMoveCost=None,#cobraMoveCost,
                             collision_distance=2., elbow_collisions=True,
                             gurobi=True)
 
-for vis, tp in zip(res, tpos):
-    print("\nTargetID   Cobra  X         Y          RA         Dec\n")
-    for tidx, cidx in vis.items():
-        print("{:} {:6d} {:10.5f} {:10.5f} {:10.5f} {:10.5f}"
-              .format(tgt[tidx].ID, cidx+1, tp[tidx].real, tp[tidx].imag,
-                      tgt[tidx].ra, tgt[tidx].dec))
 
+# write output file
+with open("output.txt", "w") as f:
+    for i, (vis, tp, tel) in enumerate(zip(res, tpos, telescopes)):
+        f.write("# Exposure {}: duration {}s, RA: {}, Dec: {}, PA: {}\n".
+                format(i+1, t_obs, tel._ra, tel._dec, tel._posang))
+        f.write("# Target    Fiber          X          Y         RA        DEC\n")
+        for tidx, cidx in vis.items():
+            f.write("{:} {:6d} {:10.5f} {:10.5f} {:10.5f} {:10.5f}\n"
+                .format(tgt[tidx].ID, cidx+1, tp[tidx].real, tp[tidx].imag,
+                        tgt[tidx].ra, tgt[tidx].dec))
+
+for vis, tp in zip(res, tpos):
     selectedTargets = np.full(len(bench.cobras.centers), NULL_TARGET_POSITION)
     ids = np.full(len(bench.cobras.centers), NULL_TARGET_ID)
     for tidx, cidx in vis.items():
