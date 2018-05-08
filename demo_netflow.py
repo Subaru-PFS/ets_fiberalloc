@@ -3,7 +3,6 @@ import ets_fiber_assigner.netflow as nf
 import numpy as np
 from cobraOps.Bench import Bench
 from cobraOps.TargetGroup import TargetGroup
-from cobraOps.TargetSelector import TargetSelector
 from cobraOps.CobrasCalibrationProduct import CobrasCalibrationProduct
 from cobraOps.CollisionSimulator import CollisionSimulator
 from cobraOps.cobraConstants import NULL_TARGET_POSITION, NULL_TARGET_ID
@@ -29,8 +28,9 @@ tgt = nf.readScientificFromFile(fscience_targets, "sci")
 
 # get a complete, idealized focal plane configuration
 bench = Bench(layout="full")
-#bench = Bench(calibrationProduct=CobrasCalibrationProduct("../ics_cobraOps/matlab/Target_Lists/collding1.5newnew/updatedCentersandHardstops.xml"))
-
+# if you have the XML file, you can also generate a more realistic focal plane
+#bench = Bench(calibrationProduct=CobrasCalibrationProduct(
+#    "../ics_cobraOps/python/ics/demos/updatedMaps6.xml"))
 
 # point the telescope at the center of all science targets
 raTel, decTel = nf.telescopeRaDecFromFile(fscience_targets)
@@ -88,17 +88,19 @@ res = nf.observeWithNetflow(bench, tgt, tpos, classdict, 900.,
                             gurobi=True)
 
 for vis, tp in zip(res, tpos):
-    print ("\nTargetID   Cobra  X         Y          RA         Dec\n")
+    print("\nTargetID   Cobra  X         Y          RA         Dec\n")
     for tidx, cidx in vis.items():
-        print ("{:} {:6d} {:10.5f} {:10.5f} {:10.5f} {:10.5f}".format(tgt[tidx].ID, cidx+1, tp[tidx].real, tp[tidx].imag, tgt[tidx].ra, tgt[tidx].dec))
+        print("{:} {:6d} {:10.5f} {:10.5f} {:10.5f} {:10.5f}"
+              .format(tgt[tidx].ID, cidx+1, tp[tidx].real, tp[tidx].imag,
+                      tgt[tidx].ra, tgt[tidx].dec))
 
     selectedTargets = np.full(len(bench.cobras.centers), NULL_TARGET_POSITION)
     ids = np.full(len(bench.cobras.centers), NULL_TARGET_ID)
     for tidx, cidx in vis.items():
         selectedTargets[cidx] = tp[tidx]
-        ids[cidx]=""
+        ids[cidx] = ""
     for i in range(selectedTargets.size):
-        if selectedTargets[i]!=NULL_TARGET_POSITION:
+        if selectedTargets[i] != NULL_TARGET_POSITION:
             dist = np.abs(selectedTargets[i]-bench.cobras.centers[i])
 
     simulator = CollisionSimulator(bench, TargetGroup(selectedTargets, ids))
@@ -107,7 +109,8 @@ for vis, tp in zip(res, tpos):
     plotUtils.pauseExecution()
 
     # Animate the trajectory collisions
-    (problematicCobras,) = np.where(simulator.collisions)
+    (problematicCobras,) = np.where(np.logical_and(
+        simulator.collisions, ~simulator.endPointCollisions))
     for cbr in problematicCobras:
         simulator.animateCobraTrajectory(cbr)
         plotUtils.pauseExecution()

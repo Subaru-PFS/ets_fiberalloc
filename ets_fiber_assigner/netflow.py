@@ -13,10 +13,11 @@ def _get_visibility(bench, tpos):
     res = defaultdict(list)
 
     for cbr in range(tmp.shape[0]):
-        for tidx in tmp[cbr,:]:
+        for tidx in tmp[cbr, :]:
             if tidx >= 0:
                 res[tidx].append(cbr)
     return res
+
 
 def _get_vis_and_elbow(bench, tpos):
     from cobraOps.TargetGroup import TargetGroup
@@ -29,10 +30,11 @@ def _get_vis_and_elbow(bench, tpos):
     res = defaultdict(list)
 
     for cbr in range(tmp.shape[0]):
-        for i, tidx in enumerate(tmp[cbr,:]):
+        for i, tidx in enumerate(tmp[cbr, :]):
             if tidx >= 0:
                 res[tidx].append((cbr, elb[cbr, i]))
     return res
+
 
 def _get_colliding_pairs(bench, tpos, vis, dist):
     tpos = np.array(tpos)
@@ -56,6 +58,7 @@ def _get_colliding_pairs(bench, tpos, vis, dist):
 
     return pairs
 
+
 def _get_elbow_collisions(bench, tpos, vis, dist):
     tpos = np.array(tpos)
     ivis = defaultdict(list)
@@ -67,7 +70,6 @@ def _get_elbow_collisions(bench, tpos, vis, dist):
 
     res = defaultdict(list)
     for cidx, thing in epos.items():
-        cpos = bench.cobras.centers[cidx]
         nb = bench.getCobraNeighbors(cidx)
         i2 = np.concatenate([ivis[j] for j in nb if j in ivis])
         i2 = np.unique(i2).astype(np.int)
@@ -81,9 +83,10 @@ def _get_elbow_collisions(bench, tpos, vis, dist):
                     res[(cidx, tidx)].append(i2[m])
     return res
 
+
 def observeWithNetflow(bench, targets, tpos, classdict, tvisit, vis_cost=None,
-                        cobraMoveCost=None, collision_distance=0.,
-                        elbow_collisions=True, gurobi=False):
+                       cobraMoveCost=None, collision_distance=0.,
+                       elbow_collisions=True, gurobi=False):
     Cv_i = defaultdict(list)  # Cobra visit inflows
     Tv_o = defaultdict(list)  # Target visit outflows
     Tv_i = defaultdict(list)  # Target visit inflows
@@ -206,12 +209,12 @@ def observeWithNetflow(bench, targets, tpos, classdict, tvisit, vis_cost=None,
     # Constraints
 
     # avoid endpoint collisions
-    if collision_distance>0.:
+    if collision_distance > 0.:
         for ivis in range(nvisits):
             cpair = _get_colliding_pairs(bench, tpos[ivis], vis[ivis],
                                          collision_distance)
             keys = Tv_o.keys()
-            keys = set(key[0] for key in keys if key[1]==ivis)
+            keys = set(key[0] for key in keys if key[1] == ivis)
             for p in cpair:
                 if p[0] in keys and p[1] in keys:
                     flows = [v[0] for v in
@@ -405,56 +408,3 @@ def readCalibrationFromFile(file, targetclass):
                 id_, ra, dec = (str(tt[0]), float(tt[1]), float(tt[2]))
                 res.append(CalibTarget(id_, ra, dec, targetclass))
     return res
-
-
-def getFullFocalPlane():
-    cobras = pyETS.getAllCobras()
-    res = []
-    for i in range(len(cobras)):
-        ID = "{}".format(i)
-        res.append(Cobra(ID, cobras[i][0], cobras[i][3], cobras[i][4],
-                         cobras[i][1], cobras[i][2]))
-    return res
-
-import matplotlib.pyplot as plt
-import matplotlib.lines as mlines
-from matplotlib import patches as mpatches
-from matplotlib import collections
-
-
-def _plot_cobra(c, crmax, dotcenter, rdot, patches, facecolor='none',
-                edgecolor='black', plot_dot=False):
-    x, y, r = (c.real, c.imag, crmax)
-    circle = mpatches.Circle((x, y), r, facecolor=facecolor,
-                             edgecolor=edgecolor, lw=1.)
-    patches.append(circle)
-    if plot_dot:
-        x, y, r = dotcenter.real, dotcenter.imag, rdot
-        circle = mpatches.Circle((x, y), r, facecolor=facecolor,
-                                 edgecolor=edgecolor, lw=1.)
-        patches.append(circle)
-
-
-def plot_assignment(bench, targets, tpos, res):
-    fig = plt.figure(figsize=[15, 15])
-    ax = plt.subplot(111)  # note we must use plt.subplots, not plt.subplot
-    patches = []
-    Rmax = 0.
-    for tidx, cidx in res.items():
-        c = bench.cobras.centers[cidx]
-        crmax = bench.cobras.rMax[cidx]
-        Rmax = max(Rmax, np.abs(c)+crmax)
-        tp = tpos[tidx]
-        t = targets[tidx]
-        color = "red" if isinstance(t, ScienceTarget) else "green"
-        _plot_cobra(c, crmax, c+bench.cobras.blackDotPosition[cidx],
-                    bench.cobras.blackDotRadius[cidx], patches, edgecolor=color)
-        x, y = c.real, c.imag
-        tx, ty = tp.real, tp.imag
-        line = mlines.Line2D([x, tx], [y, ty], lw=1, color=color)
-        ax.add_line(line)
-    collection = collections.PatchCollection(patches, match_original=True)
-    ax.add_collection(collection)
-    ax.set_ylim([-Rmax, Rmax])
-    ax.set_xlim([-Rmax, Rmax])
-    plt.show()
