@@ -1,3 +1,4 @@
+from __future__ import print_function
 import ets_fiber_assigner.netflow as nf
 import numpy as np
 from cobraOps.Bench import Bench
@@ -87,6 +88,10 @@ res = nf.observeWithNetflow(bench, tgt, tpos, classdict, 900.,
                             gurobi=True)
 
 for vis, tp in zip(res, tpos):
+    print ("\nTargetID   Cobra  X         Y          RA         Dec\n")
+    for tidx, cidx in vis.items():
+        print ("{:} {:6d} {:10.5f} {:10.5f} {:10.5f} {:10.5f}".format(tgt[tidx].ID, cidx+1, tp[tidx].real, tp[tidx].imag, tgt[tidx].ra, tgt[tidx].dec))
+
     selectedTargets = np.full(len(bench.cobras.centers), NULL_TARGET_POSITION)
     ids = np.full(len(bench.cobras.centers), NULL_TARGET_ID)
     for tidx, cidx in vis.items():
@@ -106,8 +111,3 @@ for vis, tp in zip(res, tpos):
     for cbr in problematicCobras:
         simulator.animateCobraTrajectory(cbr)
         plotUtils.pauseExecution()
-
-
-# plot assignments for every observation
-#for vis, tp in zip(res, tpos):
-#    nf.plot_assignment(bench, tgt, tp, vis)

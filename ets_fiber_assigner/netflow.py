@@ -325,10 +325,12 @@ class Target(object):
     @property
     def ra(self):
         """the rectascension : float"""
+        return self._ra
 
     @property
     def dec(self):
         """the declination : float"""
+        return self._dec
 
     def fp_position(self, raTel, decTel, posang, time):
         return pycconv.cconv([self._ra], [self._dec],
