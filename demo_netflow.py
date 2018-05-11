@@ -68,9 +68,9 @@ classdict["sci_P6"] = {"nonObservationCost": 50,
                        "partialObservationCost": 1e9, "calib": False}
 classdict["sci_P7"] = {"nonObservationCost": 40,
                        "partialObservationCost": 1e9, "calib": False}
-classdict["sky"] = {"numRequired": 20,
+classdict["sky"] = {"numRequired": 240,
                     "nonObservationCost": 1000, "calib": True}
-classdict["cal"] = {"numRequired": 5,
+classdict["cal"] = {"numRequired": 40,
                     "nonObservationCost": 1000, "calib": True}
 
 # optional: slightly increase the cost for later observations,
