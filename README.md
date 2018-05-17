@@ -2,19 +2,19 @@
 
 Current development:
 
-- ets_fiber_assigner/netflow.py:
+- `ets_fiber_assigner/netflow.py`:
   fiber assignment tool based on a network flow algorithm
 
 
 Mostly of historical interest:
 
-- src/pyETS.cc:
+- `src/pyETS.cc`:
   wrapper file describing the functionality exported to Python
 
-- src/ets.*, src/ets_helpers.h:
+- `src/ets.*, src/ets_helpers.h`:
   C++ implementation of the assigners and associated functionality
 
-- Directory src/external/
+- Directory `src/external/`:
   C and C++ sources that were originally developed for the Planck simulation
   pipeline and can be re-used for ETS
 
@@ -30,11 +30,11 @@ for details.
 The package allows to choose between the PULP package and the commercial
 (but free for academic use) Gurobi package for solving the network flow
 problem. One of those two needs to be installed and the appropriate flag needs
-to be set when calling the network solving routine `observeWithNetflow`.
+to be set when calling the network solving routine `observeWithNetflow()`.
 
 ### Package installation
 
-Simply do a "python setup.py install" or similar. "pip install ." should also
+Simply do a `python setup.py install` or similar. `pip install .` should also
 work.
 
 
