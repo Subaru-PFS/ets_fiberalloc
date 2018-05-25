@@ -20,6 +20,30 @@ def _get_visibility(bench, tpos):
     return res
 
 
+def _get_colliding_pairs(bench, tpos, vis, dist):
+    tpos = np.array(tpos)
+    ivis = defaultdict(list)
+    for tidx, cbr in vis.items():
+        for cidx in cbr:
+            ivis[cidx].append(tidx)
+
+    pairs = set()
+    for cidx, i1 in ivis.items():
+        # determine target indices visible by this cobra and its neighbors
+        nb = bench.getCobraNeighbors(cidx)
+        i2 = np.concatenate([ivis[j] for j in nb if j in ivis])
+        i2 = np.concatenate((i1, i2))
+        i2 = np.unique(i2).astype(np.int)
+        d = np.abs(np.subtract.outer(tpos[i1], tpos[i2]))
+        for m in range(d.shape[0]):
+            for n in range(d.shape[1]):
+                if d[m][n] < dist:
+                    if i1[m] < i2[n]:
+                        pairs.add((i1[m], i2[n]))
+
+    return pairs
+
+
 def _get_vis_and_elbow(bench, tpos):
     from cobraOps.TargetGroup import TargetGroup
     from cobraOps.TargetSelector import TargetSelector
@@ -37,51 +61,30 @@ def _get_vis_and_elbow(bench, tpos):
     return res
 
 
-def _get_colliding_pairs(bench, tpos, vis, dist):
-    tpos = np.array(tpos)
-    ivis = defaultdict(list)
-    for tidx, cbr in vis.items():
-        for cidx in cbr:
-            ivis[cidx].append(tidx)
-
-    pairs = set()
-    for cidx, i1 in ivis.items():
-        nb = bench.getCobraNeighbors(cidx)
-        i2 = np.concatenate([ivis[j] for j in nb if j in ivis])
-        i2 = np.concatenate((i1, i2))
-        i2 = np.unique(i2).astype(np.int)
-        d = np.abs(np.subtract.outer(tpos[i1], tpos[i2]))
-        for m in range(d.shape[0]):
-            for n in range(d.shape[1]):
-                if d[m][n] < dist:
-                    if i1[m] < i2[n]:
-                        pairs.add((i1[m], i2[n]))
-
-    return pairs
-
-
 def _get_elbow_collisions(bench, tpos, vis, dist):
     tpos = np.array(tpos)
     ivis = defaultdict(list)
     epos = defaultdict(list)
     for tidx, cidx_elbow in vis.items():
-        for thing in cidx_elbow:
-            ivis[thing[0]].append(tidx)
-            epos[thing[0]].append((tidx, thing[1]))
+        for (cidx, elbowpos) in cidx_elbow:
+            ivis[cidx].append(tidx)
+            epos[cidx].append((tidx, elbowpos))
 
     res = defaultdict(list)
     for cidx, thing in epos.items():
+        # determine target indices visible by neighbors of this cobra
         nb = bench.getCobraNeighbors(cidx)
         i2 = np.concatenate([ivis[j] for j in nb if j in ivis])
         i2 = np.unique(i2).astype(np.int)
+        # for each target visible by this cobra and the corresponding elbow
+        # position, find all targets which are too close to the "upper arm"
+        # of the cobra
         for tidx, elbowpos in thing:
             ebp = np.full(len(i2), elbowpos)
             tp = np.full(len(i2), tpos[tidx])
-            ti2 = np.array([tpos[im] for im in i2])
+            ti2 = tpos[i2]
             d = bench.distancesToLineSegments(ti2, tp, ebp)
-            for m in range(len(i2)):
-                if d[m] < dist:
-                    res[(cidx, tidx)].append(i2[m])
+            res[(cidx, tidx)] += list(i2[d<dist])
     return res
 
 
@@ -239,10 +242,11 @@ def observeWithNetflow(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                 for (cidx, tidx1), tidx2 in elbowcoll.items():
                     for idx2 in tidx2:
                         flows = []
-                        for arc in Tv_o[(tidx1, ivis)]:
-                            if arc[1] == cidx:
-                                flows.append(arc[0])
-                        flows += [v[0] for v in Tv_o[(idx2, ivis)]]
+                        for f2, cidx2 in Tv_o[(tidx1, ivis)]:
+                            if cidx2 == cidx:
+                                flows.append(f2)
+                        flows += [f2 for f2, cidx2 in Tv_o[(idx2, ivis)]
+                                  if cidx2 != cidx]
                         add_constraint(prob, lpSum(flows) <= 1)
 
     # every Cobra can observe at most one target per visit
