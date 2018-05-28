@@ -4,27 +4,11 @@ import pycconv
 from collections import defaultdict
 
 
-def _get_visibility(bench, tpos):
-    from cobraOps.TargetGroup import TargetGroup
-    from cobraOps.TargetSelector import TargetSelector
-    tgroup = TargetGroup(np.array(tpos))
-    tselect = TargetSelector(bench, tgroup)
-    tselect.calculateAccessibleTargets()
-    tmp = tselect.accessibleTargetIndices
-    res = defaultdict(list)
-
-    for cbr in range(tmp.shape[0]):
-        for tidx in tmp[cbr, :]:
-            if tidx >= 0:
-                res[tidx].append(cbr)
-    return res
-
-
 def _get_colliding_pairs(bench, tpos, vis, dist):
     tpos = np.array(tpos)
     ivis = defaultdict(list)
-    for tidx, cbr in vis.items():
-        for cidx in cbr:
+    for tidx, thing in vis.items():
+        for (cidx, _) in thing:
             ivis[cidx].append(tidx)
 
     pairs = set()
@@ -40,7 +24,6 @@ def _get_colliding_pairs(bench, tpos, vis, dist):
                 if d[m][n] < dist:
                     if i1[m] < i2[n]:
                         pairs.add((i1[m], i2[n]))
-
     return pairs
 
 
@@ -128,12 +111,7 @@ def observeWithNetflow(bench, targets, tpos, classdict, tvisit, vis_cost=None,
         else:
             nreqvisit.append(0)
 
-    print("Calculating visibilities")
-    vis = []
-    for ivis, tp in enumerate(tpos):
-        print("  exposure {}".format(ivis+1))
-        vis.append(_get_visibility(bench, tp))
-    nvisits = len(vis)
+    nvisits = len(tpos)
 
     if vis_cost is None:
         vis_cost = [0.]*nvisits
@@ -168,9 +146,12 @@ def observeWithNetflow(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                 CTCv_o[(key, ivis)].append(f)
                 cost += f*value["nonObservationCost"]
 
+    constr = []
     for ivis in range(nvisits):
         print("  exposure {}".format(ivis+1))
-        for tidx, val in vis[ivis].items():
+        print("Calculating visibilities")
+        vis = _get_vis_and_elbow(bench, tpos[ivis])
+        for tidx, thing in vis.items():
             tgt = targets[tidx]
             TC = tgt.targetclass
             Class = classdict[TC]
@@ -198,7 +179,7 @@ def observeWithNetflow(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                 f = newvar(0, 1)
                 Tv_i[(tidx, ivis)].append(f)
                 CTCv_o[(TC, ivis)].append(f)
-            for cidx in val:
+            for (cidx, _) in thing:
                 # target visit node to cobra visit node
                 f = newvar(0, 1)
                 Cv_i[(cidx, ivis)].append(f)
@@ -209,6 +190,35 @@ def observeWithNetflow(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                     tcost += cobraMoveCost(dist)
                 cost += f*tcost
 
+        # Constraints
+        print("adding constraints")
+        # avoid endpoint collisions
+        if collision_distance > 0.:
+            print("adding collision constraints")
+            if not elbow_collisions:
+                cpair = _get_colliding_pairs(bench, tpos[ivis], vis,
+                                             collision_distance)
+                keys = Tv_o.keys()
+                keys = set(key[0] for key in keys if key[1] == ivis)
+                for p in cpair:
+                    if p[0] in keys and p[1] in keys:
+                        flows = [v[0] for v in
+                                 Tv_o[(p[0], ivis)] + Tv_o[(p[1], ivis)]]
+                        constr.append(lpSum(flows) <= 1)
+            else:
+                elbowcoll = _get_elbow_collisions(bench, tpos[ivis], vis,
+                                                  collision_distance)
+                for (cidx, tidx1), tidx2 in elbowcoll.items():
+                    for f2, cidx2 in Tv_o[(tidx1, ivis)]:
+                        if cidx2 == cidx:
+                            flow0 = f2
+                    for idx2 in tidx2:
+                        if True:#idx2 != tidx1:
+                            flows = [flow0]
+                            flows += [f2 for f2, cidx2 in Tv_o[(idx2, ivis)]
+                                      if cidx2 != cidx]
+                            constr.append(lpSum(flows) <= 1)
+
     # NOTE: at least in Pulp, it is important to set the objective funcation
     # before any of the constraints!
     if gurobi:
@@ -216,38 +226,8 @@ def observeWithNetflow(bench, targets, tpos, classdict, tvisit, vis_cost=None,
     else:
         prob += cost
 
-    # Constraints
-
-    print("adding constraints")
-    # avoid endpoint collisions
-    if collision_distance > 0.:
-        print("adding collision constraints")
-        for ivis in range(nvisits):
-            print("  exposure {}".format(ivis+1))
-            cpair = _get_colliding_pairs(bench, tpos[ivis], vis[ivis],
-                                         collision_distance)
-            keys = Tv_o.keys()
-            keys = set(key[0] for key in keys if key[1] == ivis)
-            for p in cpair:
-                if p[0] in keys and p[1] in keys:
-                    flows = [v[0] for v in
-                             Tv_o[(p[0], ivis)] + Tv_o[(p[1], ivis)]]
-                    add_constraint(prob, lpSum(flows) <= 1)
-
-            # elbows
-            if elbow_collisions:
-                tmp = _get_vis_and_elbow(bench, tpos[ivis])
-                elbowcoll = _get_elbow_collisions(bench, tpos[ivis], tmp,
-                                                  collision_distance)
-                for (cidx, tidx1), tidx2 in elbowcoll.items():
-                    for idx2 in tidx2:
-                        flows = []
-                        for f2, cidx2 in Tv_o[(tidx1, ivis)]:
-                            if cidx2 == cidx:
-                                flows.append(f2)
-                        flows += [f2 for f2, cidx2 in Tv_o[(idx2, ivis)]
-                                  if cidx2 != cidx]
-                        add_constraint(prob, lpSum(flows) <= 1)
+    for c in constr:
+        add_constraint(prob, c)
 
     # every Cobra can observe at most one target per visit
     for inflow in Cv_i.values():

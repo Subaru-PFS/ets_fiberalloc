@@ -109,7 +109,7 @@ setup(name="ets_fiber_assigner",
       ext_modules=ext_modules,
       dependency_links = [],
       extras_require={'pybind11': 'pybind11>=2.2.1'},
-      install_requires = ["pybind11>=2.2.1", "pulp"],
+      install_requires = ["pybind11>=2.2.1"],
       license="GPLv2",
 )
 
