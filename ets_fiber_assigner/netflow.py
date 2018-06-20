@@ -28,8 +28,8 @@ def _get_colliding_pairs(bench, tpos, vis, dist):
 
 
 def _get_vis_and_elbow(bench, tpos):
-    from cobraOps.TargetGroup import TargetGroup
-    from cobraOps.TargetSelector import TargetSelector
+    from ics.cobraOps.TargetGroup import TargetGroup
+    from ics.cobraOps.TargetSelector import TargetSelector
     tgroup = TargetGroup(np.array(tpos))
     tselect = TargetSelector(bench, tgroup)
     tselect.calculateAccessibleTargets()

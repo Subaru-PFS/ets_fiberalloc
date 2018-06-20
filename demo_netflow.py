@@ -1,12 +1,12 @@
 from __future__ import print_function
 import ets_fiber_assigner.netflow as nf
 import numpy as np
-from cobraOps.Bench import Bench
-from cobraOps.TargetGroup import TargetGroup
-from cobraOps.CobrasCalibrationProduct import CobrasCalibrationProduct
-from cobraOps.CollisionSimulator import CollisionSimulator
-from cobraOps.cobraConstants import NULL_TARGET_POSITION, NULL_TARGET_ID
-from cobraOps import plotUtils
+from ics.cobraOps.Bench import Bench
+from ics.cobraOps.TargetGroup import TargetGroup
+from ics.cobraOps.CobrasCalibrationProduct import CobrasCalibrationProduct
+from ics.cobraOps.CollisionSimulator import CollisionSimulator
+from ics.cobraOps.cobraConstants import NULL_TARGET_POSITION, NULL_TARGET_ID
+from ics.cobraOps import plotUtils
 from collections import defaultdict
 
 # make runs reproducible
@@ -50,7 +50,6 @@ for _ in range(nvisit):
 # get focal plane positions for all targets and all visits
 tpos = [tele.get_fp_positions(tgt) for tele in telescopes]
 
-
 # create the dictionary containing the costs and constraints for all classes
 # of targets
 classdict = {}
@@ -69,18 +68,18 @@ classdict["sci_P6"] = {"nonObservationCost": 50,
 classdict["sci_P7"] = {"nonObservationCost": 40,
                        "partialObservationCost": 1e9, "calib": False}
 classdict["sky"] = {"numRequired": 240,
-                    "nonObservationCost": 1000, "calib": True}
+                    "nonObservationCost": 1e6, "calib": True}
 classdict["cal"] = {"numRequired": 40,
-                    "nonObservationCost": 1000, "calib": True}
+                    "nonObservationCost": 1e6, "calib": True}
 
 # optional: slightly increase the cost for later observations,
 # to observe as early as possible
-vis_cost = [0.1 + 0.1*i for i in range(nvisit)]
+vis_cost = [i*10. for i in range(nvisit)]
 
 
 # optional: penalize assignments where the cobra has to move far out
 def cobraMoveCost(dist):
-    return 5.*dist
+    return 0.1*dist
 
 
 # duration of one observation in seconds
@@ -88,7 +87,7 @@ t_obs = 900.
 
 # compute observation strategy
 res = nf.observeWithNetflow(bench, tgt, tpos, classdict, t_obs,
-                            vis_cost, cobraMoveCost=None,#cobraMoveCost,
+                            vis_cost, cobraMoveCost=cobraMoveCost,
                             collision_distance=2., elbow_collisions=True,
                             gurobi=True)
 
