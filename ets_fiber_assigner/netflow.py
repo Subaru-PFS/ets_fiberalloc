@@ -75,20 +75,20 @@ class GurobiProblem(object):
     def __init__(self, name="problem"):
         import gurobipy as gbp
         self._prob = gbp.Model(name)
-        self.cost = self._prob.addVar(vtype=gbp.GRB.CONTINUOUS)
+        self.cost = self._prob.addVar(name="cost", vtype=gbp.GRB.CONTINUOUS)
         self._prob.ModelSense = 1  # minimize
         self.sum = gbp.quicksum
 
-    def addVar(self, lo, hi):
+    def addVar(self, name, lo, hi):
         import gurobipy as gbp
         if lo is None:
             lo = -gbp.GRB.INFINITY
         if hi is None:
             hi = gbp.GRB.INFINITY
         if lo == 0 and hi == 1:
-            return self._prob.addVar(vtype=gbp.GRB.BINARY)
+            return self._prob.addVar(name=name, vtype=gbp.GRB.BINARY)
         else:
-            return self._prob.addVar(vtype=gbp.GRB.INTEGER)
+            return self._prob.addVar(lb=lo, ub=hi, name=name, vtype=gbp.GRB.INTEGER)
 
     def add_constraint(self, constraint):
         self._prob.addConstr(constraint)
@@ -114,15 +114,13 @@ class PulpProblem(object):
         self.sum = pulp.lpSum
         self._constr = []
 
-    def addVar(self, lo, hi):
+    def addVar(self, name, lo, hi):
         import pulp
         self._nvar += 1
         if lo == 0 and hi == 1:
-            return pulp.LpVariable("v{}".format(self._nvar),
-                                   cat=pulp.LpBinary)
+            return pulp.LpVariable(name, cat=pulp.LpBinary)
         else:
-            return pulp.LpVariable("v{}".format(self._nvar), lo, hi,
-                                   cat=pulp.LpInteger)
+            return pulp.LpVariable(name, lo, hi, cat=pulp.LpInteger)
 
     def add_constraint(self, constraint):
         self._constr.append(constraint)
@@ -142,6 +140,10 @@ class PulpProblem(object):
 
     def dump(self, filename):
         self._prob.writeLP(filename)
+
+
+def makeName(*stuff):
+    return "".join([stuff[0]] + ["_"+str(x) for x in stuff[1:]])
 
 
 def observeWithNetflow(bench, targets, tpos, classdict, tvisit, vis_cost=None,
@@ -176,7 +178,7 @@ def observeWithNetflow(bench, targets, tpos, classdict, tvisit, vis_cost=None,
     for key, value in classdict.items():
         if value["calib"]:
             for ivis in range(nvisits):
-                f = prob.addVar(0, None)
+                f = prob.addVar(makeName("CTCv_o", key, ivis), 0, None)
                 CTCv_o[(key, ivis)].append(f)
                 prob.cost += f*value["nonObservationCost"]
 
@@ -191,31 +193,31 @@ def observeWithNetflow(bench, targets, tpos, classdict, tvisit, vis_cost=None,
             Class = classdict[TC]
             if isinstance(tgt, ScienceTarget):
                 # Target node to target visit node
-                f = prob.addVar(0, 1)
+                f = prob.addVar(makeName("T_Tv", tidx, ivis), 0, 1)
                 T_o[tidx].append(f)
                 Tv_i[(tidx, ivis)].append(f)
                 if len(T_o[tidx]) == 1:  # freshly created
                     # Science Target class node to target node
-                    f = prob.addVar(0, 1)
+                    f = prob.addVar(makeName("STC_T", TC, tidx), 0, 1)
                     T_i[tidx].append(f)
                     STC_o[TC].append(f)
                     if len(STC_o[TC]) == 1:  # freshly created
                         # Science Target class node to sink
-                        f = prob.addVar(0, None)
+                        f = prob.addVar(makeName("STC_sink", TC), 0, None)
                         STC_o[TC].append(f)
                         prob.cost += f*Class["nonObservationCost"]
                     # Science Target node to sink
-                    f = prob.addVar(0, None)
+                    f = prob.addVar(makeName("ST_sink", tidx), 0, None)
                     T_o[tidx].append(f)
                     prob.cost += f*Class["partialObservationCost"]
             elif isinstance(tgt, CalibTarget):
                 # Calibration Target class node to target visit node
-                f = prob.addVar(0, 1)
+                f = prob.addVar(makeName("CTC_Tv", TC, tidx, ivis),0, 1)
                 Tv_i[(tidx, ivis)].append(f)
                 CTCv_o[(TC, ivis)].append(f)
             for (cidx, _) in thing:
                 # target visit node to cobra visit node
-                f = prob.addVar(0, 1)
+                f = prob.addVar(makeName("Tv_Cv", tidx, cidx, ivis),0, 1)
                 Cv_i[(cidx, ivis)].append(f)
                 Tv_o[(tidx, ivis)].append((f, cidx))
                 tcost = vis_cost[ivis]
