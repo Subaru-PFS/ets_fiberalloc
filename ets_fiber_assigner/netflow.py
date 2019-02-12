@@ -110,13 +110,11 @@ class PulpProblem(object):
         import pulp
         self._prob = pulp.LpProblem("problem", pulp.LpMinimize)
         self.cost = pulp.LpVariable("cost", 0)
-        self._nvar = 0
         self.sum = pulp.lpSum
         self._constr = []
 
     def addVar(self, name, lo, hi):
         import pulp
-        self._nvar += 1
         if lo == 0 and hi == 1:
             return pulp.LpVariable(name, cat=pulp.LpBinary)
         else:
@@ -143,7 +141,7 @@ class PulpProblem(object):
 
 
 def makeName(*stuff):
-    return "".join([stuff[0]] + ["_"+str(x) for x in stuff[1:]])
+    return "_".join([str(x) for x in stuff])
 
 
 def observeWithNetflow(bench, targets, tpos, classdict, tvisit, vis_cost=None,
@@ -178,7 +176,7 @@ def observeWithNetflow(bench, targets, tpos, classdict, tvisit, vis_cost=None,
     for key, value in classdict.items():
         if value["calib"]:
             for ivis in range(nvisits):
-                f = prob.addVar(makeName("CTCv_o", key, ivis), 0, None)
+                f = prob.addVar(makeName("CTCv_sink", key, ivis), 0, None)
                 CTCv_o[(key, ivis)].append(f)
                 prob.cost += f*value["nonObservationCost"]
 
@@ -212,7 +210,7 @@ def observeWithNetflow(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                     prob.cost += f*Class["partialObservationCost"]
             elif isinstance(tgt, CalibTarget):
                 # Calibration Target class node to target visit node
-                f = prob.addVar(makeName("CTC_Tv", TC, tidx, ivis),0, 1)
+                f = prob.addVar(makeName("CTCv_Tv", TC, tidx, ivis),0, 1)
                 Tv_i[(tidx, ivis)].append(f)
                 CTCv_o[(TC, ivis)].append(f)
             for (cidx, _) in thing:
