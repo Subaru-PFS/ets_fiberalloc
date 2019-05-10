@@ -67,13 +67,16 @@ def _get_elbow_collisions(bench, tpos, vis, dist):
             tp = np.full(len(i2), tpos[tidx])
             ti2 = tpos[i2]
             d = bench.distancesToLineSegments(ti2, tp, ebp)
-            res[(cidx, tidx)] += list(i2[d<dist])
+            res[(cidx, tidx)] += list(i2[d < dist])
     return res
 
 
 def observeWithNetflow(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                        cobraMoveCost=None, collision_distance=0.,
-                       elbow_collisions=True, gurobi=False):
+                       elbow_collisions=True, gurobi=True,
+                       seed=0, presolve=1, method=4, degenmoves=0, heuristics=0.8,
+                       mipfocus=0, threads=None, mipgap=1.0e-04, timeout=None,
+                       mps=True):
     Cv_i = defaultdict(list)  # Cobra visit inflows
     Tv_o = defaultdict(list)  # Target visit outflows
     Tv_i = defaultdict(list)  # Target visit inflows
@@ -107,14 +110,14 @@ def observeWithNetflow(bench, targets, tpos, classdict, tvisit, vis_cost=None,
     nreqvisit = []
     for t in targets:
         if isinstance(t, ScienceTarget):
-            nreqvisit.append(int(t.obs_time/tvisit))
+            nreqvisit.append(int(t.obs_time / tvisit))
         else:
             nreqvisit.append(0)
 
     nvisits = len(tpos)
 
     if vis_cost is None:
-        vis_cost = [0.]*nvisits
+        vis_cost = [0.] * nvisits
 
     def newvar(lo, hi):
         newvar._varcount += 1
@@ -144,11 +147,11 @@ def observeWithNetflow(bench, targets, tpos, classdict, tvisit, vis_cost=None,
             for ivis in range(nvisits):
                 f = newvar(0, None)
                 CTCv_o[(key, ivis)].append(f)
-                cost += f*value["nonObservationCost"]
+                cost += f * value["nonObservationCost"]
 
     constr = []
     for ivis in range(nvisits):
-        print("  exposure {}".format(ivis+1))
+        print("  exposure {}".format(ivis + 1))
         print("Calculating visibilities")
         vis = _get_vis_and_elbow(bench, tpos[ivis])
         for tidx, thing in vis.items():
@@ -169,11 +172,11 @@ def observeWithNetflow(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                         # Science Target class node to sink
                         f = newvar(0, None)
                         STC_o[TC].append(f)
-                        cost += f*Class["nonObservationCost"]
+                        cost += f * Class["nonObservationCost"]
                     # Science Target node to sink
                     f = newvar(0, None)
                     T_o[tidx].append(f)
-                    cost += f*Class["partialObservationCost"]
+                    cost += f * Class["partialObservationCost"]
             elif isinstance(tgt, CalibTarget):
                 # Calibration Target class node to target visit node
                 f = newvar(0, 1)
@@ -186,9 +189,9 @@ def observeWithNetflow(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                 Tv_o[(tidx, ivis)].append((f, cidx))
                 tcost = vis_cost[ivis]
                 if cobraMoveCost is not None:
-                    dist = np.abs(bench.cobras.centers[cidx]-tpos[ivis][tidx])
+                    dist = np.abs(bench.cobras.centers[cidx] - tpos[ivis][tidx])
                     tcost += cobraMoveCost(dist)
-                cost += f*tcost
+                cost += f * tcost
 
         # Constraints
         print("adding constraints")
@@ -213,7 +216,7 @@ def observeWithNetflow(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                         if cidx2 == cidx:
                             flow0 = f2
                     for idx2 in tidx2:
-                        if True:#idx2 != tidx1:
+                        if True:  # idx2 != tidx1:
                             flows = [flow0]
                             flows += [f2 for f2, cidx2 in Tv_o[(idx2, ivis)]
                                       if cidx2 != cidx]
@@ -243,22 +246,36 @@ def observeWithNetflow(bench, targets, tpos, classdict, tvisit, vis_cost=None,
     for key, ival in Tv_i.items():
         oval = Tv_o[key]
         add_constraint(prob,
-                       lpSum([v for v in ival]+[-v[0] for v in oval]) == 0)
+                       lpSum([v for v in ival] + [-v[0] for v in oval]) == 0)
 
     # inflow and outflow at every T node must be balanced
     for key, ival in T_i.items():
         oval = T_o[key]
         nvis = nreqvisit[key]
         add_constraint(prob,
-                       lpSum([nvis*v for v in ival]+[-v for v in oval]) == 0)
+                       lpSum([nvis * v for v in ival] + [-v for v in oval]) == 0)
 
     # Science targets must be either observed or go to the sink
     for key, val in STC_o.items():
-        add_constraint(prob, lpSum([v for v in val]) == len(val)-1)
+        add_constraint(prob, lpSum([v for v in val]) == len(val) - 1)
 
     print("solving the problem")
     if gurobi:
-        prob.ModelSense = 1  # minimize
+        prob.ModelSense = 1                     # minimize
+        prob.setParam('Seed', seed)             # seed
+        prob.setParam('Presolve', presolve)     # presolve
+        prob.setParam('Method', method)         # method
+        prob.setParam('DegenMoves', degenmoves)  # degenmoves
+        prob.setParam('Heuristics', heuristics)  # heuristics
+        prob.setParam('MIPFocus', mipfocus)     # MIP solver focus
+        prob.setParam('MIPGap', mipgap)         # MIPGap
+        if timeout is not None:
+            prob.setParam('TimeLimit', timeout)  # Timeout
+        if threads is not None:
+            prob.setParam('Threads', threads)  # No. of CPU threads
+        prob.update()
+        if mps:
+            prob.write('tmp.mps')
         prob.optimize()
     else:
         status = prob.solve(pulp.COIN_CMD(msg=1, keepFiles=0, maxSeconds=100,
@@ -284,6 +301,7 @@ class Telescope(object):
     compute assignment strategies using different algorithms (currently network
     flow and ETs approaches).
     """
+
     def __init__(self, ra, dec, posang, time):
         self._ra = float(ra)
         self._dec = float(dec)
@@ -309,6 +327,7 @@ class Target(object):
     initialized with RA/Dec and an ID string. From RA/Dec, the target can
     determine its position on the focal plane, once also the telescope attitude
     is known. """
+
     def __init__(self, ID, ra, dec, targetclass):
         self._ID = str(ID)
         self._ra = float(ra)
@@ -346,6 +365,7 @@ class ScienceTarget(Target):
 
     All different types of ScienceTarget need to be derived from this class."
     """
+
     def __init__(self, ID, ra, dec, obs_time, pri, prefix):
         super(ScienceTarget, self).__init__(ID, ra, dec,
                                             "{}_P{}".format(prefix, pri))
