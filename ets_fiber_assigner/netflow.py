@@ -76,7 +76,7 @@ def observeWithNetflow(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                        elbow_collisions=True, gurobi=True,
                        seed=0, presolve=1, method=4, degenmoves=0, heuristics=0.8,
                        mipfocus=0, threads=None, mipgap=1.0e-04, timeout=None,
-                       mps=True):
+                       mps=True, skip=False):
     Cv_i = defaultdict(list)  # Cobra visit inflows
     Tv_o = defaultdict(list)  # Target visit outflows
     Tv_i = defaultdict(list)  # Target visit inflows
@@ -276,19 +276,21 @@ def observeWithNetflow(bench, targets, tpos, classdict, tvisit, vis_cost=None,
         prob.update()
         if mps:
             prob.write('tmp.mps')
-        prob.optimize()
+        if skip == False:
+            prob.optimize()
     else:
         status = prob.solve(pulp.COIN_CMD(msg=1, keepFiles=0, maxSeconds=100,
                                           threads=1, dual=10.))
 
     res = [{} for _ in range(nvisits)]
-    for k1, v1 in Tv_o.items():
-        for i2 in v1:
-            visited = varValue(i2[0]) > 0
-            if visited:
-                tidx, ivis = k1
-                cidx = i2[1]
-                res[ivis][tidx] = cidx
+    if skip == False:
+        for k1, v1 in Tv_o.items():
+            for i2 in v1:
+                visited = varValue(i2[0]) > 0
+                if visited:
+                    tidx, ivis = k1
+                    cidx = i2[1]
+                    res[ivis][tidx] = cidx
     return res
 
 
