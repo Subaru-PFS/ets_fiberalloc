@@ -73,10 +73,8 @@ def _get_elbow_collisions(bench, tpos, vis, dist):
 
 def observeWithNetflow(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                        cobraMoveCost=None, collision_distance=0.,
-                       elbow_collisions=True, gurobi=True,
-                       seed=0, presolve=1, method=4, degenmoves=0, heuristics=0.8,
-                       mipfocus=0, threads=None, mipgap=1.0e-04, timeout=None,
-                       mps=True, skip=False):
+                       elbow_collisions=True, gurobi=True, gurobiOptions=None,
+                       mpsName=None, skipOptimization=False):
     Cv_i = defaultdict(list)  # Cobra visit inflows
     Tv_o = defaultdict(list)  # Target visit outflows
     Tv_i = defaultdict(list)  # Target visit inflows
@@ -110,7 +108,7 @@ def observeWithNetflow(bench, targets, tpos, classdict, tvisit, vis_cost=None,
     nreqvisit = []
     for t in targets:
         if isinstance(t, ScienceTarget):
-            nreqvisit.append(int(t.obs_time / tvisit))
+            nreqvisit.append(int(t.obs_time/tvisit))
         else:
             nreqvisit.append(0)
 
@@ -147,11 +145,11 @@ def observeWithNetflow(bench, targets, tpos, classdict, tvisit, vis_cost=None,
             for ivis in range(nvisits):
                 f = newvar(0, None)
                 CTCv_o[(key, ivis)].append(f)
-                cost += f * value["nonObservationCost"]
+                cost += f*value["nonObservationCost"]
 
     constr = []
     for ivis in range(nvisits):
-        print("  exposure {}".format(ivis + 1))
+        print("  exposure {}".format(ivis+1))
         print("Calculating visibilities")
         vis = _get_vis_and_elbow(bench, tpos[ivis])
         for tidx, thing in vis.items():
@@ -172,11 +170,11 @@ def observeWithNetflow(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                         # Science Target class node to sink
                         f = newvar(0, None)
                         STC_o[TC].append(f)
-                        cost += f * Class["nonObservationCost"]
+                        cost += f*Class["nonObservationCost"]
                     # Science Target node to sink
                     f = newvar(0, None)
                     T_o[tidx].append(f)
-                    cost += f * Class["partialObservationCost"]
+                    cost += f*Class["partialObservationCost"]
             elif isinstance(tgt, CalibTarget):
                 # Calibration Target class node to target visit node
                 f = newvar(0, 1)
@@ -189,9 +187,9 @@ def observeWithNetflow(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                 Tv_o[(tidx, ivis)].append((f, cidx))
                 tcost = vis_cost[ivis]
                 if cobraMoveCost is not None:
-                    dist = np.abs(bench.cobras.centers[cidx] - tpos[ivis][tidx])
+                    dist = np.abs(bench.cobras.centers[cidx]-tpos[ivis][tidx])
                     tcost += cobraMoveCost(dist)
-                cost += f * tcost
+                cost += f*tcost
 
         # Constraints
         print("adding constraints")
@@ -253,37 +251,29 @@ def observeWithNetflow(bench, targets, tpos, classdict, tvisit, vis_cost=None,
         oval = T_o[key]
         nvis = nreqvisit[key]
         add_constraint(prob,
-                       lpSum([nvis * v for v in ival] + [-v for v in oval]) == 0)
+                       lpSum([nvis*v for v in ival] + [-v for v in oval]) == 0)
 
     # Science targets must be either observed or go to the sink
     for key, val in STC_o.items():
-        add_constraint(prob, lpSum([v for v in val]) == len(val) - 1)
+        add_constraint(prob, lpSum([v for v in val]) == len(val)-1)
 
     print("solving the problem")
     if gurobi:
         prob.ModelSense = 1                     # minimize
-        prob.setParam('Seed', seed)             # seed
-        prob.setParam('Presolve', presolve)     # presolve
-        prob.setParam('Method', method)         # method
-        prob.setParam('DegenMoves', degenmoves)  # degenmoves
-        prob.setParam('Heuristics', heuristics)  # heuristics
-        prob.setParam('MIPFocus', mipfocus)     # MIP solver focus
-        prob.setParam('MIPGap', mipgap)         # MIPGap
-        if timeout is not None:
-            prob.setParam('TimeLimit', timeout)  # Timeout
-        if threads is not None:
-            prob.setParam('Threads', threads)  # No. of CPU threads
+        if gurobiOptions is not None:
+            for key, value in gurobiOptions.items():
+                prob.setParam(key, value)
         prob.update()
-        if mps:
-            prob.write('tmp.mps')
-        if skip == False:
+        if mpsName is not None:
+            prob.write(mpsName)
+        if not skipOptimization:
             prob.optimize()
     else:
         status = prob.solve(pulp.COIN_CMD(msg=1, keepFiles=0, maxSeconds=100,
                                           threads=1, dual=10.))
 
-    res = [{} for _ in range(nvisits)]
-    if skip == False:
+    if not skipOptimization:
+        res = [{} for _ in range(nvisits)]
         for k1, v1 in Tv_o.items():
             for i2 in v1:
                 visited = varValue(i2[0]) > 0
@@ -291,7 +281,7 @@ def observeWithNetflow(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                     tidx, ivis = k1
                     cidx = i2[1]
                     res[ivis][tidx] = cidx
-    return res
+        return res
 
 
 class Telescope(object):

@@ -85,11 +85,14 @@ def cobraMoveCost(dist):
 # duration of one observation in seconds
 t_obs = 900.
 
+gurobiOptions = dict(seed=0, presolve=1, method=4, degenmoves=0, heuristics=0.8,
+mipfocus=0, mipgap=1.0e-04)
+
 # compute observation strategy
 res = nf.observeWithNetflow(bench, tgt, tpos, classdict, t_obs,
                             vis_cost, cobraMoveCost=cobraMoveCost,
                             collision_distance=2., elbow_collisions=True,
-                            gurobi=True)
+                            gurobi=True, gurobiOptions=gurobiOptions)
 
 
 # write output file
