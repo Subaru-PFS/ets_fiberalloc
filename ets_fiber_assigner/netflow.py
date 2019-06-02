@@ -71,8 +71,21 @@ def _get_elbow_collisions(bench, tpos, vis, dist):
     return res
 
 
-class GurobiProblem(object):
+class LPProblem(object):
+    def __init__(self):
+        self._vardict={}
+        self._constraintdict={}
+
+    def varByName(self, name):
+        return self._vardict[name]
+
+    def constraintByName(self, name):
+        return self._constraintdict[name]
+
+
+class GurobiProblem(LPProblem):
     def __init__(self, name="problem", extraOptions=None):
+        LPProblem.__init__(self)
         import gurobipy as gbp
         self._prob = gbp.Model(name)
         self.cost = self._prob.addVar(name="cost", vtype=gbp.GRB.CONTINUOUS)
@@ -90,10 +103,12 @@ class GurobiProblem(object):
         if hi is None:
             hi = gbp.GRB.INFINITY
         if lo == 0 and hi == 1:
-            return self._prob.addVar(name=name, vtype=gbp.GRB.BINARY)
+            var = self._prob.addVar(name=name, vtype=gbp.GRB.BINARY)
         else:
-            return self._prob.addVar(lb=lo, ub=hi, name=name,
+            var = self._prob.addVar(lb=lo, ub=hi, name=name,
                                      vtype=gbp.GRB.INTEGER)
+        self._vardict[name] = var
+        return var
 
     def add_constraint(self, constraint):
         self._prob.addConstr(constraint)
@@ -110,8 +125,9 @@ class GurobiProblem(object):
         self._prob.write(filename)
 
 
-class PulpProblem(object):
+class PulpProblem(LPProblem):
     def __init__(self, name="problem"):
+        LPProblem.__init__(self)
         import pulp
         self._prob = pulp.LpProblem("problem", pulp.LpMinimize)
         self.cost = pulp.LpVariable("cost", 0)
@@ -121,9 +137,11 @@ class PulpProblem(object):
     def addVar(self, name, lo, hi):
         import pulp
         if lo == 0 and hi == 1:
-            return pulp.LpVariable(name, cat=pulp.LpBinary)
+            var = pulp.LpVariable(name, cat=pulp.LpBinary)
         else:
-            return pulp.LpVariable(name, lo, hi, cat=pulp.LpInteger)
+            var = pulp.LpVariable(name, lo, hi, cat=pulp.LpInteger)
+        self._vardict[name] = var
+        return var
 
     def add_constraint(self, constraint):
         self._constr.append(constraint)
@@ -293,11 +311,11 @@ def observeWithNetflow(bench, targets, tpos, classdict, tvisit, vis_cost=None,
         prob.add_constraint(prob.sum([v for v in val]) == len(val)-1)
 
     if mpsName is not None:
+        print("writing problem to file ", mpsName)
         prob.dump(mpsName)
 
-    print("solving the problem")
-
     if not skipOptimization:
+        print("solving the problem")
         prob.solve()
 
         res = [{} for _ in range(nvisits)]
