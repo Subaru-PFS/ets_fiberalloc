@@ -110,7 +110,8 @@ class GurobiProblem(LPProblem):
         self._vardict[name] = var
         return var
 
-    def add_constraint(self, constraint):
+    def add_constraint(self, name, constraint):
+        self._constraintdict[name] = constraint
         self._prob.addConstr(constraint)
 
     @staticmethod
@@ -143,7 +144,8 @@ class PulpProblem(LPProblem):
         self._vardict[name] = var
         return var
 
-    def add_constraint(self, constraint):
+    def add_constraint(self, name, constraint):
+        self._constraintdict[name] = constraint
         self._constr.append(constraint)
 
     @staticmethod
@@ -265,7 +267,8 @@ def observeWithNetflow(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                     if p[0] in keys and p[1] in keys:
                         flows = [v[0] for v in
                                  Tv_o[(p[0], ivis)] + Tv_o[(p[1], ivis)]]
-                        constr.append(prob.sum(flows) <= 1)
+                        constr.append([makeName("Coll_", p[0], p[1], ivis),
+                                       prob.sum(flows) <= 1])
             else:
                 elbowcoll = _get_elbow_collisions(bench, tpos[ivis], vis,
                                                   collision_distance)
@@ -278,37 +281,40 @@ def observeWithNetflow(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                             flows = [flow0]
                             flows += [f2 for f2, cidx2 in Tv_o[(idx2, ivis)]
                                       if cidx2 != cidx]
-                            constr.append(prob.sum(flows) <= 1)
+                            constr.append([makeName("Coll_", cidx, cidx2, ivis),
+                                           prob.sum(flows) <= 1])
 
     for c in constr:
-        prob.add_constraint(c)
+        prob.add_constraint(c[0], c[1])
 
     # every Cobra can observe at most one target per visit
-    for inflow in Cv_i.values():
-        prob.add_constraint(prob.sum([f for f in inflow]) <= 1)
+    for key, inflow in Cv_i.items():
+        prob.add_constraint(makeName("Cvlim", key[0], key[1]),
+                            prob.sum([f for f in inflow]) <= 1)
 
     # every calibration target class must be observed a minimum number of times
     # every visit
     for key, value in CTCv_o.items():
-        prob.add_constraint(prob.sum([v for v in value]) >=
-                            classdict[key[0]]["numRequired"])
+        prob.add_constraint(makeName("CTC", key[0], key[1]),
+            prob.sum([v for v in value]) >= classdict[key[0]]["numRequired"])
 
     # inflow and outflow at every Tv node must be balanced
     for key, ival in Tv_i.items():
         oval = Tv_o[key]
-        prob.add_constraint(
+        prob.add_constraint(makeName("TvIO", key[0], key[1]),
             prob.sum([v for v in ival]+[-v[0] for v in oval]) == 0)
 
     # inflow and outflow at every T node must be balanced
     for key, ival in T_i.items():
         oval = T_o[key]
         nvis = nreqvisit[key]
-        prob.add_constraint(
+        prob.add_constraint(makeName("TIO", key),
             prob.sum([nvis*v for v in ival]+[-v for v in oval]) == 0)
 
     # Science targets must be either observed or go to the sink
     for key, val in STC_o.items():
-        prob.add_constraint(prob.sum([v for v in val]) == len(val)-1)
+        prob.add_constraint(makeName("ST", key[0], key[1]),
+            prob.sum([v for v in val]) == len(val)-1)
 
     if mpsName is not None:
         print("writing problem to file ", mpsName)
