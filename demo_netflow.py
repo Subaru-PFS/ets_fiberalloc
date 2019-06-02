@@ -18,8 +18,8 @@ fscience_targets = catalog_path+"pfs_preliminary_target_cosmology.dat"
 # So far, we only have test data for targets.
 # Once we have files for calibration stars and sky locations, we can add them
 # here.
-fcal_stars       = catalog_path+"pfs_preliminary_target_cosmology_fcstars.dat"
-fsky_pos         = catalog_path+"pfs_preliminary_target_cosmology_sky.dat"
+fcal_stars = catalog_path+"pfs_preliminary_target_cosmology_fcstars.dat"
+fsky_pos = catalog_path+"pfs_preliminary_target_cosmology_sky.dat"
 
 # read all targets into a single list, giving them their proper types
 tgt = nf.readScientificFromFile(fscience_targets, "sci")
@@ -30,8 +30,8 @@ tgt += nf.readCalibrationFromFile(fsky_pos, "sky")
 # get a complete, idealized focal plane configuration
 bench = Bench(layout="full")
 # if you have the XML file, you can also generate a more realistic focal plane
-#bench = Bench(calibrationProduct=CobrasCalibrationProduct(
-#    "../ics_cobraOps/python/ics/demos/updatedMaps6.xml"))
+# bench = Bench(calibrationProduct=CobrasCalibrationProduct(
+#     "../ics_cobraOps/python/ics/demos/updatedMaps6.xml"))
 
 # point the telescope at the center of all science targets
 raTel, decTel = nf.telescopeRaDecFromFile(fscience_targets)
@@ -85,11 +85,14 @@ def cobraMoveCost(dist):
 # duration of one observation in seconds
 t_obs = 900.
 
+gurobiOptions = dict(seed=0, presolve=1, method=4, degenmoves=0,
+                     heuristics=0.8, mipfocus=0, mipgap=1.0e-04)
+
 # compute observation strategy
 res = nf.observeWithNetflow(bench, tgt, tpos, classdict, t_obs,
                             vis_cost, cobraMoveCost=cobraMoveCost,
                             collision_distance=2., elbow_collisions=True,
-                            gurobi=True)
+                            gurobi=True, gurobiOptions=gurobiOptions)
 
 
 # write output file
@@ -100,12 +103,13 @@ with open("output.txt", "w") as f:
         tdict = defaultdict(int)
         f.write("# Exposure {}: duration {}s, RA: {}, Dec: {}, PA: {}\n".
                 format(i+1, t_obs, tel._ra, tel._dec, tel._posang))
-        f.write("# Target    Fiber          X          Y         RA        DEC\n")
+        f.write("# Target    Fiber          X          Y         "
+                "RA        DEC\n")
         for tidx, cidx in vis.items():
             tdict[tgt[tidx].targetclass] += 1
             f.write("{:} {:6d} {:10.5f} {:10.5f} {:10.5f} {:10.5f}\n"
-                .format(tgt[tidx].ID, cidx+1, tp[tidx].real, tp[tidx].imag,
-                        tgt[tidx].ra, tgt[tidx].dec))
+                    .format(tgt[tidx].ID, cidx+1, tp[tidx].real, tp[tidx].imag,
+                            tgt[tidx].ra, tgt[tidx].dec))
         for cls, num in tdict.items():
             print("   {}: {}".format(cls, num))
 
