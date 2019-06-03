@@ -220,12 +220,12 @@ def observeWithNetflow(bench, targets, tpos, classdict, tvisit, vis_cost=None,
             Class = classdict[TC]
             if isinstance(tgt, ScienceTarget):
                 # Target node to target visit node
-                f = prob.addVar(makeName("T_Tv", tidx, ivis), 0, 1)
+                f = prob.addVar(makeName("T_Tv", tgt.ID, ivis), 0, 1)
                 T_o[tidx].append(f)
                 Tv_i[(tidx, ivis)].append(f)
                 if len(T_o[tidx]) == 1:  # freshly created
                     # Science Target class node to target node
-                    f = prob.addVar(makeName("STC_T", TC, tidx), 0, 1)
+                    f = prob.addVar(makeName("STC_T", TC, tgt.ID), 0, 1)
                     T_i[tidx].append(f)
                     STC_o[TC].append(f)
                     if len(STC_o[TC]) == 1:  # freshly created
@@ -234,17 +234,17 @@ def observeWithNetflow(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                         STC_o[TC].append(f)
                         prob.cost += f*Class["nonObservationCost"]
                     # Science Target node to sink
-                    f = prob.addVar(makeName("ST_sink", tidx), 0, None)
+                    f = prob.addVar(makeName("ST_sink", tgt.ID), 0, None)
                     T_o[tidx].append(f)
                     prob.cost += f*Class["partialObservationCost"]
             elif isinstance(tgt, CalibTarget):
                 # Calibration Target class node to target visit node
-                f = prob.addVar(makeName("CTCv_Tv", TC, tidx, ivis), 0, 1)
+                f = prob.addVar(makeName("CTCv_Tv", TC, tgt.ID, ivis), 0, 1)
                 Tv_i[(tidx, ivis)].append(f)
                 CTCv_o[(TC, ivis)].append(f)
             for (cidx, _) in thing:
                 # target visit node to cobra visit node
-                f = prob.addVar(makeName("Tv_Cv", tidx, cidx, ivis), 0, 1)
+                f = prob.addVar(makeName("Tv_Cv", tgt.ID, cidx, ivis), 0, 1)
                 Cv_i[(cidx, ivis)].append(f)
                 Tv_o[(tidx, ivis)].append((f, cidx))
                 tcost = vis_cost[ivis]
@@ -267,7 +267,9 @@ def observeWithNetflow(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                     if p[0] in keys and p[1] in keys:
                         flows = [v[0] for v in
                                  Tv_o[(p[0], ivis)] + Tv_o[(p[1], ivis)]]
-                        constr.append([makeName("Coll_", p[0], p[1], ivis),
+                        tname0 = targets[p[0]].ID
+                        tname1 = targets[p[1]].ID
+                        constr.append([makeName("Coll_", tname0, tname1, ivis),
                                        prob.sum(flows) <= 1])
             else:
                 elbowcoll = _get_elbow_collisions(bench, tpos[ivis], vis,
@@ -295,20 +297,20 @@ def observeWithNetflow(bench, targets, tpos, classdict, tvisit, vis_cost=None,
     # every calibration target class must be observed a minimum number of times
     # every visit
     for key, value in CTCv_o.items():
-        prob.add_constraint(makeName("CTC", key[0], key[1]),
+        prob.add_constraint(makeName("CTCv_min", key[0], key[1]),
             prob.sum([v for v in value]) >= classdict[key[0]]["numRequired"])
 
     # inflow and outflow at every Tv node must be balanced
     for key, ival in Tv_i.items():
         oval = Tv_o[key]
-        prob.add_constraint(makeName("TvIO", key[0], key[1]),
+        prob.add_constraint(makeName("TvIO", targets[key[0]].ID, key[1]),
             prob.sum([v for v in ival]+[-v[0] for v in oval]) == 0)
 
     # inflow and outflow at every T node must be balanced
     for key, ival in T_i.items():
         oval = T_o[key]
         nvis = nreqvisit[key]
-        prob.add_constraint(makeName("TIO", key),
+        prob.add_constraint(makeName("TIO", targets[key].ID),
             prob.sum([nvis*v for v in ival]+[-v for v in oval]) == 0)
 
     # Science targets must be either observed or go to the sink
@@ -450,7 +452,7 @@ def readScientificFromFile(file, prefix):
             if not l.startswith("#"):
                 tt = l.split()
                 id_, ra, dec, tm, pri = (
-                    str(tt[0]), float(tt[1]), float(tt[2]),
+                    "XX"+str(tt[0]), float(tt[1]), float(tt[2]),
                     float(tt[3]), int(tt[4]))
                 res.append(ScienceTarget(id_, ra, dec, tm, pri, prefix))
     return res
