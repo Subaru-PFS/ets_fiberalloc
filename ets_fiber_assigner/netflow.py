@@ -173,6 +173,44 @@ def observeWithNetflow(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                        cobraMoveCost=None, collision_distance=0.,
                        elbow_collisions=True, gurobi=True, gurobiOptions=None,
                        mpsName=None, skipOptimization=False):
+    """Build and solve the ILP problem for a given observation task
+
+    Parameters
+    ==========
+    bench : ics.cobraOps.Bench.Bench
+        description of the focal plane
+    targets : list of Target objects
+        all targets available for observation,
+        i.e. science, sky and calibration targets
+    tpos : list of list of complex
+        focal plane positions for all targets (inner list) and all visits
+        (outer list)
+    classdict : dict(string : dict(string : <param>))
+        properties of target classes
+    tvisit : float
+        duration of a single visit in seconds
+    vis_cost : list of float (nvisit entries)
+        cost for observing a target in a given visit. This can be used to make
+        the solver prefer earlier over later observations
+    cobraMoveCost : lambda taking a float
+        extra cost when observing a target at a given distance from the center
+        of the observing cobra. Can be used to make Cobras prefer target closer
+        to the center of their patrol region.
+    collision_distance : float
+        collision distance between cobra tips
+    elbow_collisions : bool
+        if True, avoid elbow collisions in the endpoint configuration
+        (increases the number of constraints, especially for long target lists)
+    gurobi : bool
+        if True, use the Gurobi optimizer, otherwise use PuLP
+    gurobiOptions : dict(string : <param>)
+        optional additional parameters for the Gurobi solver
+    mpsName : string
+        if supplied, the generated problem is written in MPS format to the
+        specified file
+    skipOptimization : bool
+        if True, no optimization is performed
+    """
     Cv_i = defaultdict(list)  # Cobra visit inflows
     Tv_o = defaultdict(list)  # Target visit outflows
     Tv_i = defaultdict(list)  # Target visit inflows
@@ -339,12 +377,18 @@ def observeWithNetflow(bench, targets, tpos, classdict, tvisit, vis_cost=None,
 
 class Telescope(object):
     """An object describing a telescope configuration to be used for observing
-    a target field. Includes a list of Cobras, telescope RA/Dec and position
-    angle and an observation time according to ISO8601 UTC.
-    The minimum allowed distance between two Cobra tips is also stored here.
-    Based on this information, and given a list of targets, this object can
-    compute assignment strategies using different algorithms (currently network
-    flow and ETs approaches).
+    a target field.
+
+    Parameters
+    ==========
+    ra : float
+        right ascension of the focal plane center
+    dec : float
+        declination of the focal plane center
+    posang : float
+        position angle of the focal plane
+    time : string
+        time of observation in ISO8601 UTC format
     """
 
     def __init__(self, ra, dec, posang, time):
@@ -353,16 +397,19 @@ class Telescope(object):
         self._posang = float(posang)
         self._time = str(time)
 
-    def subtract_obs_time(self, tgt, obs, tvisit):
-        res = []
-        for k in obs.keys():
-            tgt[k].reduce_time(tvisit)
-        for t in tgt:
-            if t.obs_time > 0.:
-                res.append(t)
-        return res
-
     def get_fp_positions(self, tgt):
+        """Returns positions on the focal plane for a list of targets
+
+        Parameters
+        ==========
+        tgt : list of Target objects
+            the targets whose focal plane position is requested
+
+        Returns
+        =======
+        list of complex numbers
+            the focal plane positions encoded as complex numbers
+        """
         return [t.fp_position(self._ra, self._dec, self._posang, self._time)
                 for t in tgt]
 
@@ -431,6 +478,21 @@ class CalibTarget(Target):
 
 
 def telescopeRaDecFromFile(file):
+    """Obtain a heuristic telescope pointing from a file with science targets
+
+    Parameters
+    ==========
+    file : string
+        the name os the text file containing the target information
+
+    Returns
+    =======
+    float, float : the approximate center of the targets in the file
+
+    Notes
+    =====
+    For testing/demonstration purposes only. DO NOT USE FOR SERIOUS WORK.
+    """
     with open(file) as f:
         ras = []
         decs = []
@@ -445,6 +507,19 @@ def telescopeRaDecFromFile(file):
 
 
 def readScientificFromFile(file, prefix):
+    """Read a set of scientific targets from a file
+
+    Parameters
+    ==========
+    file : string
+        the name os the text file containing the target information
+    prefix : string
+        the name of the target class to which these targets will belong
+
+    Returns
+    =======
+    list of ScienceTarget : the created ScienceTarget objects
+    """
     with open(file) as f:
         res = []
         ll = f.readlines()
@@ -459,6 +534,19 @@ def readScientificFromFile(file, prefix):
 
 
 def readCalibrationFromFile(file, targetclass):
+    """Read a set of calibration targets from a file
+
+    Parameters
+    ==========
+    file : string
+        the name os the text file containing the target information
+    targetclass : string
+        the name of the target class to which these targets will belong
+
+    Returns
+    =======
+    list of CalibrationTarget : the created CalibrationTarget objects
+    """
     with open(file) as f:
         res = []
         ll = f.readlines()
