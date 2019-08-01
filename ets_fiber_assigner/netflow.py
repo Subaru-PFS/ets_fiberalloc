@@ -282,7 +282,7 @@ def observeWithNetflow(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                 CTCv_o[(TC, ivis)].append(f)
             for (cidx, _) in thing:
                 # target visit node to cobra visit node
-                f = prob.addVar(makeName("Tv_Cv", tgt.ID, cidx, ivis), 0, 1)
+                f = prob.addVar(makeName("Tv_Cv", tidx, cidx, ivis), 0, 1)
                 Cv_i[(cidx, ivis)].append(f)
                 Tv_o[(tidx, ivis)].append((f, cidx))
                 tcost = vis_cost[ivis]
@@ -365,13 +365,20 @@ def observeWithNetflow(bench, targets, tpos, classdict, tvisit, vis_cost=None,
         prob.solve()
 
         res = [{} for _ in range(nvisits)]
-        for k1, v1 in Tv_o.items():
-            for i2 in v1:
-                visited = prob.value(i2[0]) > 0
+#         for k1, v1 in Tv_o.items():
+#             for i2 in v1:
+#                 visited = prob.value(i2[0]) > 0
+#                 if visited:
+#                     tidx, ivis = k1
+#                     cidx = i2[1]
+#                     res[ivis][tidx] = cidx
+        res = [{} for _ in range(nvisits)]
+        for k1, v1 in prob._vardict.items():
+            if k1.startswith("Tv_Cv_"):
+                visited = prob.value(v1) > 0
                 if visited:
-                    tidx, ivis = k1
-                    cidx = i2[1]
-                    res[ivis][tidx] = cidx
+                    _, _, tidx, cidx, ivis = k1.split("_")
+                    res[int(ivis)][int(tidx)] = int(cidx)
         return res
 
 
@@ -527,7 +534,7 @@ def readScientificFromFile(file, prefix):
             if not l.startswith("#"):
                 tt = l.split()
                 id_, ra, dec, tm, pri = (
-                    "XX"+str(tt[0]), float(tt[1]), float(tt[2]),
+                    str(tt[0]), float(tt[1]), float(tt[2]),
                     float(tt[3]), int(tt[4]))
                 res.append(ScienceTarget(id_, ra, dec, tm, pri, prefix))
     return res
