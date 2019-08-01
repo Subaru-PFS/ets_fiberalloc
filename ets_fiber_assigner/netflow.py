@@ -169,11 +169,10 @@ def makeName(*stuff):
     return "_".join([str(x) for x in stuff])
 
 
-def observeWithNetflow(bench, targets, tpos, classdict, tvisit, vis_cost=None,
-                       cobraMoveCost=None, collision_distance=0.,
-                       elbow_collisions=True, gurobi=True, gurobiOptions=None,
-                       mpsName=None, skipOptimization=False):
-    """Build and solve the ILP problem for a given observation task
+def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
+                 cobraMoveCost=None, collision_distance=0.,
+                 elbow_collisions=True, gurobi=True, gurobiOptions=None):
+    """Build the ILP problem for a given observation task
 
     Parameters
     ==========
@@ -205,11 +204,6 @@ def observeWithNetflow(bench, targets, tpos, classdict, tvisit, vis_cost=None,
         if True, use the Gurobi optimizer, otherwise use PuLP
     gurobiOptions : dict(string : <param>)
         optional additional parameters for the Gurobi solver
-    mpsName : string
-        if supplied, the generated problem is written in MPS format to the
-        specified file
-    skipOptimization : bool
-        if True, no optimization is performed
     """
     Cv_i = defaultdict(list)  # Cobra visit inflows
     Tv_o = defaultdict(list)  # Target visit outflows
@@ -356,30 +350,7 @@ def observeWithNetflow(bench, targets, tpos, classdict, tvisit, vis_cost=None,
         prob.add_constraint(makeName("ST", key[0], key[1]),
             prob.sum([v for v in val]) == len(val)-1)
 
-    if mpsName is not None:
-        print("writing problem to file ", mpsName)
-        prob.dump(mpsName)
-
-    if not skipOptimization:
-        print("solving the problem")
-        prob.solve()
-
-        res = [{} for _ in range(nvisits)]
-#         for k1, v1 in Tv_o.items():
-#             for i2 in v1:
-#                 visited = prob.value(i2[0]) > 0
-#                 if visited:
-#                     tidx, ivis = k1
-#                     cidx = i2[1]
-#                     res[ivis][tidx] = cidx
-        res = [{} for _ in range(nvisits)]
-        for k1, v1 in prob._vardict.items():
-            if k1.startswith("Tv_Cv_"):
-                visited = prob.value(v1) > 0
-                if visited:
-                    _, _, tidx, cidx, ivis = k1.split("_")
-                    res[int(ivis)][int(tidx)] = int(cidx)
-        return res
+    return prob
 
 
 class Telescope(object):

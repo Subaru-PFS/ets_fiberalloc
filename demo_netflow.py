@@ -89,11 +89,25 @@ gurobiOptions = dict(seed=0, presolve=1, method=4, degenmoves=0,
                      heuristics=0.8, mipfocus=0, mipgap=1.0e-04)
 
 # compute observation strategy
-res = nf.observeWithNetflow(bench, tgt, tpos, classdict, t_obs,
-                            vis_cost, cobraMoveCost=cobraMoveCost,
-                            collision_distance=2., elbow_collisions=True,
-                            gurobi=True, gurobiOptions=gurobiOptions)
+prob = nf.buildProblem(bench, tgt, tpos, classdict, t_obs,
+                       vis_cost, cobraMoveCost=cobraMoveCost,
+                       collision_distance=2., elbow_collisions=True,
+                       gurobi=True, gurobiOptions=gurobiOptions)
 
+# print("writing problem to file ", mpsName)
+# prob.dump(mpsName)
+
+print("solving the problem")
+prob.solve()
+
+# extract solution
+res = [{} for _ in range(nvisit)]
+for k1, v1 in prob._vardict.items():
+    if k1.startswith("Tv_Cv_"):
+        visited = prob.value(v1) > 0
+        if visited:
+            _, _, tidx, cidx, ivis = k1.split("_")
+            res[int(ivis)][int(tidx)] = int(cidx)
 
 # write output file
 with open("output.txt", "w") as f:
