@@ -122,8 +122,22 @@ class GurobiProblem(LPProblem):
         self._prob.setObjective(self.cost)
         self._prob.optimize()
 
+    def update(self):
+        self._prob.update()
+
     def dump(self, filename):
         self._prob.write(filename)
+
+    @staticmethod
+    def varBounds(var):
+        return var.lb, var.ub
+
+    @staticmethod
+    def changeVarBounds(var, lower=None, upper=None):
+        if lower is not None:
+            var.lb = lower
+        if upper is not None:
+            var.ub = upper
 
 
 class PulpProblem(LPProblem):
@@ -161,8 +175,22 @@ class PulpProblem(LPProblem):
         self._prob.solve(pulp.COIN_CMD(msg=1, keepFiles=0, maxSeconds=100,
                                        threads=1, dual=10.))
 
+    def update(self):
+        pass
+
     def dump(self, filename):
         self._prob.writeLP(filename)
+
+    @staticmethod
+    def varBounds(var):
+        return var.lowBound, var.upBound
+
+    @staticmethod
+    def changeVarBounds(var, lower=None, upper=None):
+        if lower is not None:
+            var.lowBound = lower
+        if upper is not None:
+            var.upBound = upper
 
 
 def makeName(*stuff):
