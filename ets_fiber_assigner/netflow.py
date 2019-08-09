@@ -375,8 +375,11 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
 
     # Science targets must be either observed or go to the sink
     for key, val in STC_o.items():
+        n_obs = len(val)-1
+        if "nobs_max" in classdict[key]:
+            n_obs = classdict[key]["nobs_max"]
         prob.add_constraint(makeName("ST", key[0], key[1]),
-            prob.sum([v for v in val]) == len(val)-1)
+            prob.sum([v for v in val]) == n_obs)
 
     return prob
 
