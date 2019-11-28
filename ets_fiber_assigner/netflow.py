@@ -30,8 +30,16 @@ def _get_colliding_pairs(bench, tpos, vis, dist):
 def _get_vis_and_elbow(bench, tpos):
     from ics.cobraOps.TargetGroup import TargetGroup
     from ics.cobraOps.TargetSelector import TargetSelector
+
+    class DummyTargetSelector(TargetSelector):
+        def run(self):
+            return
+
+        def selectTargets(self):
+            return
+
     tgroup = TargetGroup(np.array(tpos))
-    tselect = TargetSelector(bench, tgroup)
+    tselect = DummyTargetSelector(bench, tgroup)
     tselect.calculateAccessibleTargets()
     tmp = tselect.accessibleTargetIndices
     elb = tselect.accessibleTargetElbows
