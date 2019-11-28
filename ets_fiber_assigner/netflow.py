@@ -199,7 +199,8 @@ def makeName(*stuff):
 
 def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                  cobraMoveCost=None, collision_distance=0.,
-                 elbow_collisions=True, gurobi=True, gurobiOptions=None):
+                 elbow_collisions=True, gurobi=True, gurobiOptions=None,
+                 alreadyObserved=None):
     """Build the ILP problem for a given observation task
 
     Parameters
@@ -232,6 +233,9 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
         if True, use the Gurobi optimizer, otherwise use PuLP
     gurobiOptions : dict(string : <param>)
         optional additional parameters for the Gurobi solver
+    alreadyObserved : None or dict{string: int}
+        if not None, this is a dictionary containing IDs of science targets
+        and the number of visits they have already been observed
     """
     Cv_i = defaultdict(list)  # Cobra visit inflows
     Tv_o = defaultdict(list)  # Target visit outflows
@@ -247,11 +251,18 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
         prob = PulpProblem()
 
     nreqvisit = []
+    ndone = []
     for t in targets:
         if isinstance(t, ScienceTarget):
-            nreqvisit.append(int(t.obs_time/tvisit))
+            nreqvisit.append(int(t.obs_time/tvisit))  # FIXME: maybe round up?
+            tmp = 0
+            if alreadyObserved is not None:
+                if t.ID in alreadyObserved:
+                    tmp = alreadyObserved[t.ID]
+            ndone.append(tmp)
         else:
             nreqvisit.append(0)
+            ndone.append(0)
 
     nvisits = len(tpos)
 
@@ -285,7 +296,8 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                 Tv_i[(tidx, ivis)].append(f)
                 if len(T_o[tidx]) == 1:  # freshly created
                     # Science Target class node to target node
-                    f = prob.addVar(makeName("STC_T", TC, tgt.ID), 0, 1)
+                    tmp = 1 if ndone[tidx] > 0 else 0
+                    f = prob.addVar(makeName("STC_T", TC, tgt.ID), tmp, 1)
                     T_i[tidx].append(f)
                     STC_o[TC].append(f)
                     if len(STC_o[TC]) == 1:  # freshly created
@@ -369,7 +381,9 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
     # inflow and outflow at every T node must be balanced
     for key, ival in T_i.items():
         oval = T_o[key]
-        nvis = nreqvisit[key]
+        nvis = nreqvisit[key]-ndone[key]
+        if nvis < 0:
+            nvis = 0
         prob.add_constraint(makeName("TIO", targets[key].ID),
             prob.sum([nvis*v for v in ival]+[-v for v in oval]) == 0)
 
