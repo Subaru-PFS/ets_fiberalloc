@@ -65,17 +65,19 @@ def _get_elbow_collisions(bench, tpos, vis, dist):
     for cidx, thing in epos.items():
         # determine target indices visible by neighbors of this cobra
         nb = bench.getCobraNeighbors(cidx)
-        i2 = np.concatenate([ivis[j] for j in nb if j in ivis])
-        i2 = np.unique(i2).astype(np.int)
-        # for each target visible by this cobra and the corresponding elbow
-        # position, find all targets which are too close to the "upper arm"
-        # of the cobra
-        for tidx, elbowpos in thing:
-            ebp = np.full(len(i2), elbowpos)
-            tp = np.full(len(i2), tpos[tidx])
-            ti2 = tpos[i2]
-            d = bench.distancesToLineSegments(ti2, tp, ebp)
-            res[(cidx, tidx)] += list(i2[d < dist])
+        tmp = [ivis[j] for j in nb if j in ivis]
+        if tmp != []:
+            i2 = np.concatenate([ivis[j] for j in nb if j in ivis])
+            i2 = np.unique(i2).astype(np.int)
+            # for each target visible by this cobra and the corresponding elbow
+            # position, find all targets which are too close to the "upper arm"
+            # of the cobra
+            for tidx, elbowpos in thing:
+                ebp = np.full(len(i2), elbowpos)
+                tp = np.full(len(i2), tpos[tidx])
+                ti2 = tpos[i2]
+                d = bench.distancesToLineSegments(ti2, tp, ebp)
+                res[(cidx, tidx)] += list(i2[d < dist])
     return res
 
 
