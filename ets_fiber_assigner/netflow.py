@@ -71,10 +71,168 @@ def _get_elbow_collisions(bench, tpos, vis, dist):
     return res
 
 
-def observeWithNetflow(bench, targets, tpos, classdict, tvisit, vis_cost=None,
-                       cobraMoveCost=None, collision_distance=0.,
-                       elbow_collisions=True, gurobi=True, gurobiOptions=None,
-                       mpsName=None, skipOptimization=False):
+class LPProblem(object):
+    def __init__(self):
+        self._vardict={}
+        self._constraintdict={}
+
+    def varByName(self, name):
+        return self._vardict[name]
+
+    def constraintByName(self, name):
+        return self._constraintdict[name]
+
+
+class GurobiProblem(LPProblem):
+    def __init__(self, name="problem", extraOptions=None):
+        LPProblem.__init__(self)
+        import gurobipy as gbp
+        self._prob = gbp.Model(name)
+        self.cost = self._prob.addVar(name="cost", vtype=gbp.GRB.CONTINUOUS)
+        self._prob.ModelSense = 1  # minimize
+        if extraOptions is not None:
+            for key, value in extraOptions.items():
+                self._prob.setParam(key, value)
+        self._prob.update()
+        self.sum = gbp.quicksum
+
+    def addVar(self, name, lo, hi):
+        import gurobipy as gbp
+        if lo is None:
+            lo = -gbp.GRB.INFINITY
+        if hi is None:
+            hi = gbp.GRB.INFINITY
+        if lo == 0 and hi == 1:
+            var = self._prob.addVar(name=name, vtype=gbp.GRB.BINARY)
+        else:
+            var = self._prob.addVar(lb=lo, ub=hi, name=name,
+                                     vtype=gbp.GRB.INTEGER)
+        self._vardict[name] = var
+        return var
+
+    def add_constraint(self, name, constraint):
+        self._constraintdict[name] = constraint
+        self._prob.addConstr(constraint)
+
+    @staticmethod
+    def value(var):
+        return var.X
+
+    def solve(self):
+        self._prob.setObjective(self.cost)
+        self._prob.optimize()
+
+    def update(self):
+        self._prob.update()
+
+    def dump(self, filename):
+        self._prob.write(filename)
+
+    @staticmethod
+    def varBounds(var):
+        return var.lb, var.ub
+
+    @staticmethod
+    def changeVarBounds(var, lower=None, upper=None):
+        if lower is not None:
+            var.lb = lower
+        if upper is not None:
+            var.ub = upper
+
+
+class PulpProblem(LPProblem):
+    def __init__(self, name="problem"):
+        LPProblem.__init__(self)
+        import pulp
+        self._prob = pulp.LpProblem("problem", pulp.LpMinimize)
+        self.cost = pulp.LpVariable("cost", 0)
+        self.sum = pulp.lpSum
+        self._constr = []
+
+    def addVar(self, name, lo, hi):
+        import pulp
+        if lo == 0 and hi == 1:
+            var = pulp.LpVariable(name, cat=pulp.LpBinary)
+        else:
+            var = pulp.LpVariable(name, lo, hi, cat=pulp.LpInteger)
+        self._vardict[name] = var
+        return var
+
+    def add_constraint(self, name, constraint):
+        self._constraintdict[name] = constraint
+        self._constr.append(constraint)
+
+    @staticmethod
+    def value(var):
+        import pulp
+        return pulp.value(var)
+
+    def solve(self):
+        import pulp
+        self._prob += self.cost
+        for i in self._constr:
+            self._prob += i
+        self._prob.solve(pulp.COIN_CMD(msg=1, keepFiles=0, maxSeconds=100,
+                                       threads=1, dual=10.))
+
+    def update(self):
+        pass
+
+    def dump(self, filename):
+        self._prob.writeLP(filename)
+
+    @staticmethod
+    def varBounds(var):
+        return var.lowBound, var.upBound
+
+    @staticmethod
+    def changeVarBounds(var, lower=None, upper=None):
+        if lower is not None:
+            var.lowBound = lower
+        if upper is not None:
+            var.upBound = upper
+
+
+def makeName(*stuff):
+    return "_".join([str(x) for x in stuff])
+
+
+def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
+                 cobraMoveCost=None, collision_distance=0.,
+                 elbow_collisions=True, gurobi=True, gurobiOptions=None):
+    """Build the ILP problem for a given observation task
+
+    Parameters
+    ==========
+    bench : ics.cobraOps.Bench.Bench
+        description of the focal plane
+    targets : list of Target objects
+        all targets available for observation,
+        i.e. science, sky and calibration targets
+    tpos : list of list of complex
+        focal plane positions for all targets (inner list) and all visits
+        (outer list)
+    classdict : dict(string : dict(string : <param>))
+        properties of target classes
+    tvisit : float
+        duration of a single visit in seconds
+    vis_cost : list of float (nvisit entries)
+        cost for observing a target in a given visit. This can be used to make
+        the solver prefer earlier over later observations
+    cobraMoveCost : lambda taking a float
+        extra cost when observing a target at a given distance from the center
+        of the observing cobra. Can be used to make Cobras prefer target closer
+        to the center of their patrol region.
+    collision_distance : float
+        collision distance between cobra tips
+    elbow_collisions : bool
+        if True, avoid elbow collisions in the endpoint configuration
+        (increases the number of constraints, especially for long target lists)
+    gurobi : bool
+        if True, use the Gurobi optimizer, otherwise use PuLP
+    gurobiOptions : dict(string : <param>)
+        optional additional parameters for the Gurobi solver
+    """
     Cv_i = defaultdict(list)  # Cobra visit inflows
     Tv_o = defaultdict(list)  # Target visit outflows
     Tv_i = defaultdict(list)  # Target visit inflows
@@ -82,28 +240,11 @@ def observeWithNetflow(bench, targets, tpos, classdict, tvisit, vis_cost=None,
     T_i = defaultdict(list)  # Target inflows (only science targets)
     CTCv_o = defaultdict(list)  # Calibration Target class visit outflows
     STC_o = defaultdict(list)  # Science Target outflows
+
     if gurobi:
-        import gurobipy as gbp
-        prob = gbp.Model("problem")
-        cost = prob.addVar(vtype=gbp.GRB.CONTINUOUS, name="cost")
-        lpSum = gbp.quicksum
-
-        def add_constraint(problem, constraint):
-            problem.addConstr(constraint)
-
-        def varValue(var):
-            return var.X
+        prob = GurobiProblem(extraOptions=gurobiOptions)
     else:
-        import pulp
-        prob = pulp.LpProblem("problem", pulp.LpMinimize)
-        cost = pulp.LpVariable("cost", 0)
-        lpSum = pulp.lpSum
-
-        def add_constraint(problem, constraint):
-            problem += constraint
-
-        def varValue(var):
-            return pulp.value(var)
+        prob = PulpProblem()
 
     nreqvisit = []
     for t in targets:
@@ -117,25 +258,6 @@ def observeWithNetflow(bench, targets, tpos, classdict, tvisit, vis_cost=None,
     if vis_cost is None:
         vis_cost = [0.] * nvisits
 
-    def newvar(lo, hi):
-        newvar._varcount += 1
-        if gurobi:
-            if lo is None:
-                lo = -gbp.GRB.INFINITY
-            if hi is None:
-                hi = gbp.GRB.INFINITY
-            if lo == 0 and hi == 1:
-                return prob.addVar(vtype=gbp.GRB.BINARY,
-                                   name="v{}".format(newvar._varcount))
-            else:
-                return prob.addVar(vtype=gbp.GRB.INTEGER,
-                                   name="v{}".format(newvar._varcount),
-                                   lb=lo, ub=hi)
-        else:
-            return pulp.LpVariable("v{}".format(newvar._varcount), lo, hi,
-                                   cat=pulp.LpInteger)
-    newvar._varcount = 0
-
     # define LP variables
 
     print("Creating network topology")
@@ -143,9 +265,9 @@ def observeWithNetflow(bench, targets, tpos, classdict, tvisit, vis_cost=None,
     for key, value in classdict.items():
         if value["calib"]:
             for ivis in range(nvisits):
-                f = newvar(0, None)
+                f = prob.addVar(makeName("CTCv_sink", key, ivis), 0, None)
                 CTCv_o[(key, ivis)].append(f)
-                cost += f*value["nonObservationCost"]
+                prob.cost += f*value["nonObservationCost"]
 
     constr = []
     for ivis in range(nvisits):
@@ -158,38 +280,38 @@ def observeWithNetflow(bench, targets, tpos, classdict, tvisit, vis_cost=None,
             Class = classdict[TC]
             if isinstance(tgt, ScienceTarget):
                 # Target node to target visit node
-                f = newvar(0, 1)
+                f = prob.addVar(makeName("T_Tv", tgt.ID, ivis), 0, 1)
                 T_o[tidx].append(f)
                 Tv_i[(tidx, ivis)].append(f)
                 if len(T_o[tidx]) == 1:  # freshly created
                     # Science Target class node to target node
-                    f = newvar(0, 1)
+                    f = prob.addVar(makeName("STC_T", TC, tgt.ID), 0, 1)
                     T_i[tidx].append(f)
                     STC_o[TC].append(f)
                     if len(STC_o[TC]) == 1:  # freshly created
                         # Science Target class node to sink
-                        f = newvar(0, None)
+                        f = prob.addVar(makeName("STC_sink", TC), 0, None)
                         STC_o[TC].append(f)
-                        cost += f*Class["nonObservationCost"]
+                        prob.cost += f*Class["nonObservationCost"]
                     # Science Target node to sink
-                    f = newvar(0, None)
+                    f = prob.addVar(makeName("ST_sink", tgt.ID), 0, None)
                     T_o[tidx].append(f)
-                    cost += f*Class["partialObservationCost"]
+                    prob.cost += f*Class["partialObservationCost"]
             elif isinstance(tgt, CalibTarget):
                 # Calibration Target class node to target visit node
-                f = newvar(0, 1)
+                f = prob.addVar(makeName("CTCv_Tv", TC, tgt.ID, ivis), 0, 1)
                 Tv_i[(tidx, ivis)].append(f)
                 CTCv_o[(TC, ivis)].append(f)
             for (cidx, _) in thing:
                 # target visit node to cobra visit node
-                f = newvar(0, 1)
+                f = prob.addVar(makeName("Tv_Cv", tidx, cidx, ivis), 0, 1)
                 Cv_i[(cidx, ivis)].append(f)
                 Tv_o[(tidx, ivis)].append((f, cidx))
                 tcost = vis_cost[ivis]
                 if cobraMoveCost is not None:
                     dist = np.abs(bench.cobras.centers[cidx]-tpos[ivis][tidx])
                     tcost += cobraMoveCost(dist)
-                cost += f*tcost
+                prob.cost += f*tcost
 
         # Constraints
         print("adding constraints")
@@ -205,7 +327,10 @@ def observeWithNetflow(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                     if p[0] in keys and p[1] in keys:
                         flows = [v[0] for v in
                                  Tv_o[(p[0], ivis)] + Tv_o[(p[1], ivis)]]
-                        constr.append(lpSum(flows) <= 1)
+                        tname0 = targets[p[0]].ID
+                        tname1 = targets[p[1]].ID
+                        constr.append([makeName("Coll_", tname0, tname1, ivis),
+                                       prob.sum(flows) <= 1])
             else:
                 elbowcoll = _get_elbow_collisions(bench, tpos[ivis], vis,
                                                   collision_distance)
@@ -218,80 +343,61 @@ def observeWithNetflow(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                             flows = [flow0]
                             flows += [f2 for f2, cidx2 in Tv_o[(idx2, ivis)]
                                       if cidx2 != cidx]
-                            constr.append(lpSum(flows) <= 1)
-
-    # NOTE: at least in Pulp, it is important to set the objective funcation
-    # before any of the constraints!
-    if gurobi:
-        prob.setObjective(cost)
-    else:
-        prob += cost
+                            constr.append([makeName("Coll_", cidx, cidx2, ivis),
+                                           prob.sum(flows) <= 1])
 
     for c in constr:
-        add_constraint(prob, c)
+        prob.add_constraint(c[0], c[1])
 
     # every Cobra can observe at most one target per visit
-    for inflow in Cv_i.values():
-        add_constraint(prob, lpSum([f for f in inflow]) <= 1)
+    for key, inflow in Cv_i.items():
+        prob.add_constraint(makeName("Cvlim", key[0], key[1]),
+                            prob.sum([f for f in inflow]) <= 1)
 
     # every calibration target class must be observed a minimum number of times
     # every visit
     for key, value in CTCv_o.items():
-        add_constraint(prob, lpSum([v for v in value]) >=
-                       classdict[key[0]]["numRequired"])
+        prob.add_constraint(makeName("CTCv_min", key[0], key[1]),
+            prob.sum([v for v in value]) >= classdict[key[0]]["numRequired"])
 
     # inflow and outflow at every Tv node must be balanced
     for key, ival in Tv_i.items():
         oval = Tv_o[key]
-        add_constraint(prob,
-                       lpSum([v for v in ival] + [-v[0] for v in oval]) == 0)
+        prob.add_constraint(makeName("TvIO", targets[key[0]].ID, key[1]),
+            prob.sum([v for v in ival]+[-v[0] for v in oval]) == 0)
 
     # inflow and outflow at every T node must be balanced
     for key, ival in T_i.items():
         oval = T_o[key]
         nvis = nreqvisit[key]
-        add_constraint(prob,
-                       lpSum([nvis*v for v in ival] + [-v for v in oval]) == 0)
+        prob.add_constraint(makeName("TIO", targets[key].ID),
+            prob.sum([nvis*v for v in ival]+[-v for v in oval]) == 0)
 
     # Science targets must be either observed or go to the sink
     for key, val in STC_o.items():
-        add_constraint(prob, lpSum([v for v in val]) == len(val)-1)
+        n_obs = len(val)-1
+        if "nobs_max" in classdict[key]:
+            n_obs = classdict[key]["nobs_max"]
+        prob.add_constraint(makeName("ST", key[0], key[1]),
+            prob.sum([v for v in val]) == n_obs)
 
-    print("solving the problem")
-    if gurobi:
-        prob.ModelSense = 1                     # minimize
-        if gurobiOptions is not None:
-            for key, value in gurobiOptions.items():
-                prob.setParam(key, value)
-        prob.update()
-        if mpsName is not None:
-            prob.write(mpsName)
-        if not skipOptimization:
-            prob.optimize()
-    else:
-        status = prob.solve(pulp.COIN_CMD(msg=1, keepFiles=0, maxSeconds=100,
-                                          threads=1, dual=10.))
-
-    if not skipOptimization:
-        res = [{} for _ in range(nvisits)]
-        for k1, v1 in Tv_o.items():
-            for i2 in v1:
-                visited = varValue(i2[0]) > 0
-                if visited:
-                    tidx, ivis = k1
-                    cidx = i2[1]
-                    res[ivis][tidx] = cidx
-        return res
+    return prob
 
 
 class Telescope(object):
     """An object describing a telescope configuration to be used for observing
-    a target field. Includes a list of Cobras, telescope RA/Dec and position
-    angle and an observation time according to ISO8601 UTC.
-    The minimum allowed distance between two Cobra tips is also stored here.
-    Based on this information, and given a list of targets, this object can
-    compute assignment strategies using different algorithms (currently network
-    flow and ETs approaches).
+    a target field.
+
+    Parameters
+    ==========
+    ra : float
+        right ascension of the focal plane center
+    dec : float
+        declination of the focal plane center
+    posang : float
+        position angle of the focal plane
+    time : string
+        time of observation in ISO8601 UTC format
     """
 
     def __init__(self, ra, dec, posang, time):
@@ -300,16 +406,19 @@ class Telescope(object):
         self._posang = float(posang)
         self._time = str(time)
 
-    def subtract_obs_time(self, tgt, obs, tvisit):
-        res = []
-        for k in obs.keys():
-            tgt[k].reduce_time(tvisit)
-        for t in tgt:
-            if t.obs_time > 0.:
-                res.append(t)
-        return res
-
     def get_fp_positions(self, tgt):
+        """Returns positions on the focal plane for a list of targets
+
+        Parameters
+        ==========
+        tgt : list of Target objects
+            the targets whose focal plane position is requested
+
+        Returns
+        =======
+        list of complex numbers
+            the focal plane positions encoded as complex numbers
+        """
         return [t.fp_position(self._ra, self._dec, self._posang, self._time)
                 for t in tgt]
 
@@ -378,6 +487,21 @@ class CalibTarget(Target):
 
 
 def telescopeRaDecFromFile(file):
+    """Obtain a heuristic telescope pointing from a file with science targets
+
+    Parameters
+    ==========
+    file : string
+        the name os the text file containing the target information
+
+    Returns
+    =======
+    float, float : the approximate center of the targets in the file
+
+    Notes
+    =====
+    For testing/demonstration purposes only. DO NOT USE FOR SERIOUS WORK.
+    """
     with open(file) as f:
         ras = []
         decs = []
@@ -392,6 +516,19 @@ def telescopeRaDecFromFile(file):
 
 
 def readScientificFromFile(file, prefix):
+    """Read a set of scientific targets from a file
+
+    Parameters
+    ==========
+    file : string
+        the name os the text file containing the target information
+    prefix : string
+        the name of the target class to which these targets will belong
+
+    Returns
+    =======
+    list of ScienceTarget : the created ScienceTarget objects
+    """
     with open(file) as f:
         res = []
         ll = f.readlines()
@@ -406,6 +543,19 @@ def readScientificFromFile(file, prefix):
 
 
 def readCalibrationFromFile(file, targetclass):
+    """Read a set of calibration targets from a file
+
+    Parameters
+    ==========
+    file : string
+        the name os the text file containing the target information
+    targetclass : string
+        the name of the target class to which these targets will belong
+
+    Returns
+    =======
+    list of CalibrationTarget : the created CalibrationTarget objects
+    """
     with open(file) as f:
         res = []
         ll = f.readlines()
