@@ -83,16 +83,25 @@ def cobraMoveCost(dist):
 
 
 # duration of one observation in seconds
-t_obs = 900.
+t_obs = 300.
 
 gurobiOptions = dict(seed=0, presolve=1, method=4, degenmoves=0,
                      heuristics=0.8, mipfocus=0, mipgap=1.0e-04)
+
+# let's pretend that most targets have already been completely observed,
+# and that the rest has been partially observed
+alreadyObserved={}
+for t in tgt:
+    alreadyObserved[t.ID] = 3
+for t in tgt[::10]:
+    alreadyObserved[t.ID] = 1
 
 # compute observation strategy
 prob = nf.buildProblem(bench, tgt, tpos, classdict, t_obs,
                        vis_cost, cobraMoveCost=cobraMoveCost,
                        collision_distance=2., elbow_collisions=True,
-                       gurobi=True, gurobiOptions=gurobiOptions)
+                       gurobi=True, gurobiOptions=gurobiOptions,
+                       alreadyObserved=alreadyObserved)
 
 # print("writing problem to file ", mpsName)
 # prob.dump(mpsName)
