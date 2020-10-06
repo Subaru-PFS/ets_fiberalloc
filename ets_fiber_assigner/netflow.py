@@ -442,7 +442,7 @@ class Telescope(object):
         list of complex numbers
             the focal plane positions encoded as complex numbers
         """
-        from coordinates.CoordTransp import CoordinateTransform as ctrans
+        from pfs.utils.coordinates.CoordTransp import CoordinateTransform as ctrans
         tmp = np.zeros((2,len(tgt)), dtype=np.float64)
         for i, t in enumerate(tgt):
             tmp[0, i], tmp[1, i] = t.ra, t.dec

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 import numpy as np
 import pyETS
-from coordinates.CoordTransp import CoordinateTransform as ctrans
+from pfs.utils.coordinates.CoordTransp import CoordinateTransform as ctrans
 
 
 def readTargets(fname):
