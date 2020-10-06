@@ -1,6 +1,5 @@
 from __future__ import print_function
 import numpy as np
-import pycconv
 from collections import defaultdict
 
 
@@ -443,8 +442,14 @@ class Telescope(object):
         list of complex numbers
             the focal plane positions encoded as complex numbers
         """
-        return [t.fp_position(self._ra, self._dec, self._posang, self._time)
-                for t in tgt]
+        from coordinates.CoordTransp import CoordinateTransform as ctrans
+        tmp = np.zeros((2,len(tgt)), dtype=np.float64)
+        for i, t in enumerate(tgt):
+            tmp[0, i], tmp[1, i] = t.ra, t.dec
+        tmp = ctrans(xyin=tmp,
+            za=0., mode="sky_pfi", inr=0., pa=self._posang,
+            cent=np.array([self._ra, self._dec]), time=self._time)
+        return tmp[0, :] + 1j*tmp[1, :]
 
 
 class Target(object):
@@ -473,10 +478,6 @@ class Target(object):
     def dec(self):
         """the declination : float"""
         return self._dec
-
-    def fp_position(self, raTel, decTel, posang, time):
-        return pycconv.cconv([self._ra], [self._dec],
-                             raTel, decTel, posang, time)[0]
 
     @property
     def targetclass(self):

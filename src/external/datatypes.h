@@ -36,7 +36,6 @@
 
 #include <string>
 #include <cstddef>
-#include "xcomplex.h"
 #include "error_handling.h"
 
 // Template magic to select the proper data types. These templates
@@ -267,8 +266,6 @@ enum NDT {
        NAT_FLOAT,
        NAT_DOUBLE,
        NAT_LONGDOUBLE,
-       NAT_FCMPLX,
-       NAT_DCMPLX,
        NAT_BOOL,
        NAT_STRING };
 
@@ -289,8 +286,6 @@ template<> inline NDT nativeType<unsigned long long>() { return NAT_ULONGLONG; }
 template<> inline NDT nativeType<float>             () { return NAT_FLOAT;     }
 template<> inline NDT nativeType<double>            () { return NAT_DOUBLE;    }
 template<> inline NDT nativeType<long double>       () { return NAT_LONGDOUBLE;}
-template<> inline NDT nativeType<fcomplex>          () { return NAT_FCMPLX;    }
-template<> inline NDT nativeType<dcomplex>          () { return NAT_DCMPLX;    }
 template<> inline NDT nativeType<bool>              () { return NAT_BOOL;      }
 template<> inline NDT nativeType<std::string>       () { return NAT_STRING;    }
 
@@ -313,8 +308,6 @@ inline int ndt2size (NDT type)
     case NAT_FLOAT     : return sizeof(float);
     case NAT_DOUBLE    : return sizeof(double);
     case NAT_LONGDOUBLE: return sizeof(long double);
-    case NAT_FCMPLX    : return sizeof(fcomplex);
-    case NAT_DCMPLX    : return sizeof(dcomplex);
     case NAT_BOOL      : return sizeof(bool);
     default:
       planck_fail ("ndt2size: unsupported data type");
