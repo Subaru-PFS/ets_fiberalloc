@@ -96,27 +96,64 @@ for t in tgt:
 for t in tgt[::10]:
     alreadyObserved[t.ID] = 1
 
-# compute observation strategy
-prob = nf.buildProblem(bench, tgt, tpos, classdict, t_obs,
-                       vis_cost, cobraMoveCost=cobraMoveCost,
-                       collision_distance=2., elbow_collisions=True,
-                       gurobi=True, gurobiOptions=gurobiOptions,
-                       alreadyObserved=alreadyObserved)
+forbiddenPairs = None
+done = False
+while not done:
+    # compute observation strategy
+    prob = nf.buildProblem(bench, tgt, tpos, classdict, t_obs,
+                           vis_cost, cobraMoveCost=cobraMoveCost,
+                           collision_distance=2., elbow_collisions=True,
+                           gurobi=False, gurobiOptions=gurobiOptions,
+                           alreadyObserved=alreadyObserved,
+                           forbiddenPairs=forbiddenPairs)
 
-# print("writing problem to file ", mpsName)
-# prob.dump(mpsName)
+    # print("writing problem to file ", mpsName)
+    # prob.dump(mpsName)
 
-print("solving the problem")
-prob.solve()
+    print("solving the problem")
+    prob.solve()
 
-# extract solution
-res = [{} for _ in range(nvisit)]
-for k1, v1 in prob._vardict.items():
-    if k1.startswith("Tv_Cv_"):
-        visited = prob.value(v1) > 0
-        if visited:
-            _, _, tidx, cidx, ivis = k1.split("_")
-            res[int(ivis)][int(tidx)] = int(cidx)
+    # extract solution
+    res = [{} for _ in range(nvisit)]
+    for k1, v1 in prob._vardict.items():
+        if k1.startswith("Tv_Cv_"):
+            visited = prob.value(v1) > 0
+            if visited:
+                _, _, tidx, cidx, ivis = k1.split("_")
+                res[int(ivis)][int(tidx)] = int(cidx)
+
+    # check for trajectory collisions
+    forbiddenPairs=[]
+    nforbidden = 0
+    print("Checking for trajectory collisions")
+    for vis, tp in zip(res, tpos):
+        forbiddenPairs.append([])
+        selectedTargets = np.full(len(bench.cobras.centers), NULL_TARGET_POSITION)
+        ids = np.full(len(bench.cobras.centers), NULL_TARGET_ID)
+        for tidx, cidx in vis.items():
+            selectedTargets[cidx] = tp[tidx]
+            ids[cidx] = ""
+        for i in range(selectedTargets.size):
+            if selectedTargets[i] != NULL_TARGET_POSITION:
+                dist = np.abs(selectedTargets[i]-bench.cobras.centers[i])
+
+        simulator = CollisionSimulator(bench, TargetGroup(selectedTargets, ids))
+        simulator.run()
+        if np.any(simulator.endPointCollisions):
+            print("ERROR: detected end point collision, which should be impossible")
+        coll_tidx = []
+        for tidx, cidx in vis.items():
+            if simulator.collisions[cidx]:
+                nforbidden += 1
+                coll_tidx.append(tidx)
+        additional_constraints = []
+        for i1 in range(0,len(coll_tidx)):
+            for i2 in range(i1+1,len(coll_tidx)):
+                if np.abs(tp[coll_tidx[i1]]-tp[coll_tidx[i2]])<10:
+                    forbiddenPairs[-1].append((coll_tidx[i1],coll_tidx[i2]))
+
+    print("trajectory collisions found:", nforbidden)
+    done = nforbidden == 0
 
 # write output file
 with open("output.txt", "w") as f:

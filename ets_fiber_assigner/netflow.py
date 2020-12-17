@@ -209,7 +209,7 @@ def makeName(*stuff):
 def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                  cobraMoveCost=None, collision_distance=0.,
                  elbow_collisions=True, gurobi=True, gurobiOptions=None,
-                 alreadyObserved=None):
+                 alreadyObserved=None, forbiddenPairs=None):
     """Build the ILP problem for a given observation task
 
     Parameters
@@ -245,6 +245,9 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
     alreadyObserved : None or dict{string: int}
         if not None, this is a dictionary containing IDs of science targets
         and the number of visits they have already been observed
+    forbiddenPairs : None or list(list(tuple of 2 ints))
+        Pairs of targets that cannot be both observed during the same visit,
+        because this would lead to trajectory collisions
     """
     Cv_i = defaultdict(list)  # Cobra visit inflows
     Tv_o = defaultdict(list)  # Target visit outflows
@@ -366,6 +369,20 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                                       if cidx2 != cidx]
                             constr.append([makeName("Coll_", cidx, cidx2, ivis),
                                            prob.sum(flows) <= 1])
+
+        # add constraints for forbidden pairs of targets
+        if forbiddenPairs is not None:
+            print("adding forbidden pair constraints")
+            keys = Tv_o.keys()
+            keys = set(key[0] for key in keys if key[1] == ivis)
+            for p in forbiddenPairs[ivis]:
+                if p[0] in keys and p[1] in keys:
+                    flows = [v[0] for v in
+                             Tv_o[(p[0], ivis)] + Tv_o[(p[1], ivis)]]
+                    tname0 = targets[p[0]].ID
+                    tname1 = targets[p[1]].ID
+                    constr.append([makeName("forbiddenPair_", tname0, tname1, ivis),
+                                   prob.sum(flows) <= 1])
 
     for c in constr:
         prob.add_constraint(c[0], c[1])
