@@ -96,7 +96,10 @@ for t in tgt:
 for t in tgt[::10]:
     alreadyObserved[t.ID] = 1
 
-forbiddenPairs = None
+forbiddenPairs = []
+for i in range(nvisit):
+    forbiddenPairs.append([])
+
 done = False
 while not done:
     # compute observation strategy
@@ -122,12 +125,9 @@ while not done:
                 _, _, tidx, cidx, ivis = k1.split("_")
                 res[int(ivis)][int(tidx)] = int(cidx)
 
-    # check for trajectory collisions
-    forbiddenPairs=[]
-    nforbidden = 0
     print("Checking for trajectory collisions")
-    for vis, tp in zip(res, tpos):
-        forbiddenPairs.append([])
+    ncoll = 0
+    for ivis, (vis, tp) in enumerate(zip(res, tpos)):
         selectedTargets = np.full(len(bench.cobras.centers), NULL_TARGET_POSITION)
         ids = np.full(len(bench.cobras.centers), NULL_TARGET_ID)
         for tidx, cidx in vis.items():
@@ -144,16 +144,15 @@ while not done:
         coll_tidx = []
         for tidx, cidx in vis.items():
             if simulator.collisions[cidx]:
-                nforbidden += 1
                 coll_tidx.append(tidx)
-        additional_constraints = []
+        ncoll += len(coll_tidx)
         for i1 in range(0,len(coll_tidx)):
             for i2 in range(i1+1,len(coll_tidx)):
                 if np.abs(tp[coll_tidx[i1]]-tp[coll_tidx[i2]])<10:
-                    forbiddenPairs[-1].append((coll_tidx[i1],coll_tidx[i2]))
+                    forbiddenPairs[ivis].append((coll_tidx[i1],coll_tidx[i2]))
 
-    print("trajectory collisions found:", nforbidden)
-    done = nforbidden == 0
+    print("trajectory collisions found:", ncoll)
+    done = ncoll == 0
 
 # write output file
 with open("output.txt", "w") as f:
