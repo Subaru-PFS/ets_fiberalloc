@@ -1,7 +1,7 @@
 from __future__ import print_function
 import numpy as np
 from collections import defaultdict
-
+from astropy.table import Table
 
 def _get_colliding_pairs(bench, tpos, vis, dist):
     tpos = np.array(tpos)
@@ -544,6 +544,13 @@ def telescopeRaDecFromFile(file):
     =====
     For testing/demonstration purposes only. DO NOT USE FOR SERIOUS WORK.
     """
+    try:
+        # first try reading as ecsv format
+        t = Table.read(file, format="ascii.ecsv")
+        return float(np.average(t["R.A."])), float(np.average(t['Dec.']))
+    except:
+        pass
+
     with open(file) as f:
         ras = []
         decs = []
@@ -571,6 +578,17 @@ def readScientificFromFile(file, prefix):
     =======
     list of ScienceTarget : the created ScienceTarget objects
     """
+    try:
+        # first try reading as ecsv format
+        t = Table.read(file, format="ascii.ecsv")
+        res = []
+        for r in t:
+            res.append(ScienceTarget(r["ID"], r["R.A."], r["Dec."], r["Exposure Time"], r["Priority"], prefix))
+        return res
+    except:
+        pass
+
+    # try legacy format
     with open(file) as f:
         res = []
         ll = f.readlines()
@@ -598,6 +616,17 @@ def readCalibrationFromFile(file, targetclass):
     =======
     list of CalibrationTarget : the created CalibrationTarget objects
     """
+    try:
+        # first try reading as ecsv format
+        t = Table.read(file, format="ascii.ecsv")
+        res = []
+        for r in t:
+            res.append(CalibTarget(r["ID"], r["R.A."], r["Dec."], targetclass))
+        return res
+    except:
+        pass
+
+    # try legacy format
     with open(file) as f:
         res = []
         ll = f.readlines()
