@@ -1,14 +1,18 @@
 from __future__ import print_function
-import ets_fiber_assigner.netflow as nf
+
 import numpy as np
+import sys
+from collections import defaultdict
+
+import ets_fiber_assigner.netflow as nf
+
 from ics.cobraOps.Bench import Bench
 from ics.cobraOps.TargetGroup import TargetGroup
 from ics.cobraOps.CobrasCalibrationProduct import CobrasCalibrationProduct
 from ics.cobraOps.CollisionSimulator import CollisionSimulator
 from ics.cobraOps.cobraConstants import NULL_TARGET_POSITION, NULL_TARGET_ID
 from ics.cobraOps import plotUtils
-from collections import defaultdict
-import sys
+from pfs import datamodel
 
 # make runs reproducible
 np.random.seed(20)
@@ -60,6 +64,8 @@ classdict["sky"] = {"numRequired": 240,
                     "nonObservationCost": 1e9, "calib": True}
 classdict["cal"] = {"numRequired": 40,
                     "nonObservationCost": 1e9, "calib": True}
+
+tclassdict = {'sci_P1' : 1, 'sky' : 2, 'cal' : 3}
 
 # optional: slightly increase the cost for later observations,
 # to observe as early as possible
@@ -146,6 +152,7 @@ while not done:
 # write output file
 with open("output.txt", "w") as f:
     for i, (vis, tp, tel) in enumerate(zip(res, tpos, telescopes)):
+        # Write legacy output.txt
         print("exposure {}:".format(i))
         print("  assigned Cobras: {}".format(len(vis)))
         tdict = defaultdict(int)
@@ -160,5 +167,48 @@ with open("output.txt", "w") as f:
                             tgt[tidx].ra, tgt[tidx].dec))
         for cls, num in tdict.items():
             print("   {}: {}".format(cls, num))
+
+        # Write PFS design
+        N = len(vis.items())
+        ra = []
+        dec = []
+        pfiNominal = []
+        fiberId = []
+        objId = []
+        targetType = []
+
+        for tidx, cidx in vis.items():
+            tdict[tgt[tidx].targetclass] += 1
+            ra.append(tgt[tidx].ra)
+            dec.append(tgt[tidx].dec)
+            fiberId.append(cidx)
+            objId.append(tgt[tidx].ID)
+            pfiNominal.append([ tp[tidx].real, tp[tidx].imag ])
+            targetType.append( tclassdict[ tgt[tidx].targetclass ] )
+
+        d = dict(pfsDesignId = 0,
+                raBoresight=tel._ra,
+                decBoresight=tel._dec,
+                posAng=tel._posang,
+                fiberId=fiberId,
+                tract=[np.nan] * N,
+                patch=["nan,np.nan"] * N,
+                ra=ra,
+                dec=dec,
+                catId=[np.nan] * N,
+                objId=objId,
+                targetType=targetType,
+                fiberStatus=[1] * N,
+                fiberFlux=[[np.nan]] * N,
+                psfFlux=[[np.nan]] * N,
+                totalFlux=[[np.nan]] * N,
+                fiberFluxErr=[[np.nan]] * N,
+                psfFluxErr=[[np.nan]] * N,
+                totalFluxErr=[[np.nan]] * N,
+                filterNames=[['g']] * N,
+                pfiNominal=pfiNominal
+                )
+        pfsDesign = datamodel.PfsDesign(**d)
+        pfsDesign.write(dirName='.', fileName="pfsdesign_exp{:03d}.fits".format(i))
 
 sys.exit(0)
