@@ -1,10 +1,8 @@
-from __future__ import print_function
-
 import numpy as np
-import sys
 from collections import defaultdict
 
 import ets_fiber_assigner.netflow as nf
+import ets_fiber_assigner.io_helpers
 
 from ics.cobraOps.Bench import Bench
 from ics.cobraOps.TargetGroup import TargetGroup
@@ -12,7 +10,6 @@ from ics.cobraOps.CobrasCalibrationProduct import CobrasCalibrationProduct
 from ics.cobraOps.CollisionSimulator import CollisionSimulator
 from ics.cobraOps.cobraConstants import NULL_TARGET_POSITION, NULL_TARGET_ID
 from ics.cobraOps import plotUtils
-from pfs import datamodel
 
 # make runs reproducible
 np.random.seed(20)
@@ -168,47 +165,11 @@ with open("output.txt", "w") as f:
         for cls, num in tdict.items():
             print("   {}: {}".format(cls, num))
 
-        # Write PFS design
-        N = len(vis.items())
-        ra = []
-        dec = []
-        pfiNominal = []
-        fiberId = []
-        objId = []
-        targetType = []
-
-        for tidx, cidx in vis.items():
-            tdict[tgt[tidx].targetclass] += 1
-            ra.append(tgt[tidx].ra)
-            dec.append(tgt[tidx].dec)
-            fiberId.append(cidx)
-            objId.append(tgt[tidx].ID)
-            pfiNominal.append([ tp[tidx].real, tp[tidx].imag ])
-            targetType.append( tclassdict[ tgt[tidx].targetclass ] )
-
-        d = dict(pfsDesignId = 0,
-                raBoresight=tel._ra,
-                decBoresight=tel._dec,
-                posAng=tel._posang,
-                fiberId=fiberId,
-                tract=[np.nan] * N,
-                patch=["nan,np.nan"] * N,
-                ra=ra,
-                dec=dec,
-                catId=[np.nan] * N,
-                objId=objId,
-                targetType=targetType,
-                fiberStatus=[1] * N,
-                fiberFlux=[[np.nan]] * N,
-                psfFlux=[[np.nan]] * N,
-                totalFlux=[[np.nan]] * N,
-                fiberFluxErr=[[np.nan]] * N,
-                psfFluxErr=[[np.nan]] * N,
-                totalFluxErr=[[np.nan]] * N,
-                filterNames=[['g']] * N,
-                pfiNominal=pfiNominal
-                )
-        pfsDesign = datamodel.PfsDesign(**d)
-        pfsDesign.write(dirName='.', fileName="pfsdesign_exp{:03d}.fits".format(i))
-
-sys.exit(0)
+        ets_fiber_assigner.io_helpers.writePfsDesign(
+            pfsDesignId=i,
+            pfsDesignDirectory='.',
+            vis=vis,
+            tp=tp,
+            tel=tel,
+            tgt=tgt,
+            classdict=tclassdict)
