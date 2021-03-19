@@ -18,21 +18,9 @@ class get_pybind_include(object):
         import pybind11
         return pybind11.get_include(self.user)
 
-extsrc = ['src/external/rotmatrix.cc',
-         'src/external/string_utils.cc','src/external/pointing.cc',
-         'src/external/error_handling.cc']
+extsrc = ['src/external/string_utils.cc', 'src/external/error_handling.cc']
 
 ext_modules = [
-    Extension(
-        'pycconv',
-        ['src/pycconv.cc','src/cconv.cc'] + extsrc,
-        include_dirs=['src','src/external',
-            # Path to pybind11 headers
-            get_pybind_include(),
-            get_pybind_include(user=True)
-        ],
-        language='c++'
-    ),
     Extension(
         'pyETS',
         ['src/pyETS.cc','src/ets.cc'] + extsrc,

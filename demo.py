@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 import numpy as np
 import pyETS
-import pycconv
+from pfs.utils.coordinates.CoordTransp import CoordinateTransform as ctrans
 
 
 def readTargets(fname):
-    print fname
+    print (fname)
     with open(fname) as f:
         ll = f.readlines()
         ids = []
@@ -36,7 +36,13 @@ def radec2pos(ras, decs, raTel=None, decTel=None, posang=0.,
         raTel = np.average(ras)
     if decTel is None:
         decTel = np.average(decs)
-    return pycconv.cconv(ras, decs, raTel, decTel, posang, time)
+    tmp = np.array([ras, decs])
+    tmp = ctrans(xyin=tmp,
+                 za=0., mode="sky_pfi", inr=0., pa=posang,
+                 cent=np.array([raTel, decTel]),
+                 time=time)
+    return tmp[0, :] + 1j*tmp[1, :]
+
 
 if __name__ == '__main__':
     # get a data structure containing the idealized cobras
@@ -53,9 +59,8 @@ if __name__ == '__main__':
     # list of assigned targets and which cobras were used to observe them.
     res = pyETS.getObs(pos, times, pris, cobras, "draining_closest")
 
-    print "TargetID   Cobra  X         Y          RA         Dec"
-    for i in range(len(res.keys())):
-        idx = res.keys()[i]
-        print "%s %6i %10.5f %10.5f %10.5f %10.5f" % (ids[idx],
-              res.values()[i]+1, pos[idx].real, pos[idx].imag, ras[idx],
-              decs[idx])
+    print ("TargetID   Cobra  X         Y          RA         Dec")
+    for idx, val in res.items():
+        print ("%s %6i %10.5f %10.5f %10.5f %10.5f" % (ids[idx],
+              val+1, pos[idx].real, pos[idx].imag, ras[idx],
+              decs[idx]))
