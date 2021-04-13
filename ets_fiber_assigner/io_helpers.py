@@ -3,14 +3,14 @@ from collections import defaultdict
 
 def readPfsDesign(pfsDesignId, pfsDesignDirectory="."):
     import pfs.datamodel
-    return pfs.datamodelPfsDesign.read(pfsDesignId, pfsDesignDirectory):
+    return pfs.datamodelPfsDesign.read(pfsDesignId, pfsDesignDirectory)
 
 def inputParamsFromPfsDesign(pfsDesignId, pfsDesignDirectory):
     import pfs.datamodel
     from .netflow import Telescope
     design = pfs.datamodel.PfsDesign.read(pfsDesignId, pfsDesignDirectory)
     return Telescope(design.raBoresight, design.decBoresight, design.posAng,
-                     300.)  # placeholder until we know where to get the observation time 
+                     300.)  # placeholder until we know where to get the observation time
 
 def writePfsDesign(pfsDesignId, pfsDesignDirectory, vis, tp, tel, tgt, classdict):
     import pfs.datamodel
@@ -54,7 +54,8 @@ def writePfsDesign(pfsDesignId, pfsDesignDirectory, vis, tp, tel, tgt, classdict
         psfFluxErr=[[np.nan]] * N,
         totalFluxErr=[[np.nan]] * N,
         filterNames=[['g']] * N,
-        pfiNominal=pfiNominal)
+        pfiNominal=pfiNominal,
+        guideStars=None)
 
     pfsDesign = pfs.datamodel.PfsDesign(**d)
     filename = pfs.datamodel.PfsDesign.fileNameFormat % (pfsDesignId)
