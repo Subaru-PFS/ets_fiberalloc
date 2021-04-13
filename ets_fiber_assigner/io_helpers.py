@@ -1,6 +1,10 @@
 import numpy as np
 from collections import defaultdict
 
+def readPfsDesign(pfsDesignId, pfsDesignDirectory="."):
+    import pfs.datamodel
+    return pfs.datamodelPfsDesign.read(pfsDesignId, pfsDesignDirectory):
+
 def inputParamsFromPfsDesign(pfsDesignId, pfsDesignDirectory):
     import pfs.datamodel
     from .netflow import Telescope
@@ -29,7 +33,6 @@ def writePfsDesign(pfsDesignId, pfsDesignDirectory, vis, tp, tel, tgt, classdict
         pfiNominal.append([ tp[tidx].real, tp[tidx].imag ])
         targetType.append(classdict[tgt[tidx].targetclass ] )
 
-    print(tel._ra,tel._dec, tel._posang)
     d = dict(pfsDesignId=pfsDesignId,
         raBoresight=tel._ra,
         decBoresight=tel._dec,
