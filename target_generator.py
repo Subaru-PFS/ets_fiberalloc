@@ -13,6 +13,7 @@ from ics.cobraOps.TargetGroup import TargetGroup
 from ics.cobraOps.CobrasCalibrationProduct import CobrasCalibrationProduct
 from ics.cobraOps.CollisionSimulator import CollisionSimulator
 from ics.cobraOps.cobraConstants import NULL_TARGET_POSITION, NULL_TARGET_ID, NULL_TARGET_INDEX
+from pfs import datamodel
 
 DIST_TYPES = OrderedDict()
 DIST_TYPES["hom"] = "Homogeneous distribution."
@@ -62,6 +63,43 @@ def filterTargets(args, bench):
     bc = np.bincount(tgtidx, minlength=tpos.shape[0])
     return (bc==1)
     
+def write_to_pfsdesign(args, t):
+    import ets_fiber_assigner.netflow as nf
+
+    # compute focal plane positions
+    tgt = nf.readScientificFromFile(args.out_file_name, 'sci')
+    tel = nf.Telescope(args.tel_ra, args.tel_dec, args.tel_pos_ang, args.tel_obs_time)
+    tpos = tel.get_fp_positions(tgt)
+    pfiNominal = [[tp.real, tp.imag] for tp in tpos]
+
+    N = t["R.A."].shape[0]
+    d = dict(pfsDesignId = 0,
+            raBoresight=tel._ra,
+            decBoresight=tel._dec,
+            posAng=tel._posang,
+            fiberId=[0] * N,
+            tract=[np.nan] * N,
+            patch=["nan,np.nan"] * N,
+            ra=t["R.A."],
+            dec=t["Dec."],
+            catId=[np.nan] * N,
+            objId=np.arange(N),
+            targetType=[1]*N,
+            fiberStatus=[1] * N,
+            fiberFlux=[[np.nan]] * N,
+            psfFlux=[[np.nan]] * N,
+            totalFlux=[[np.nan]] * N,
+            fiberFluxErr=[[np.nan]] * N,
+            psfFluxErr=[[np.nan]] * N,
+            totalFluxErr=[[np.nan]] * N,
+            filterNames=[['g']] * N,
+            pfiNominal=pfiNominal,
+            arms=None,
+            guideStars=None
+            )
+    pfsDesign = datamodel.PfsDesign(**d)
+    pfsDesign.write(dirName='.', fileName="pfsdesign_exp{:03d}.fits".format(0))
+
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-v", "--verbose", help="increase output verbosity",
@@ -140,6 +178,8 @@ if args.select_single_cobra:
     selection = filterTargets(args, bench)
     t = t[selection]
     t.write(args.out_file_name, format="ascii.ecsv", overwrite=True)
+
+write_to_pfsdesign(args, t)
 
 if args.plot:
     from matplotlib import pyplot as plt
