@@ -8,8 +8,11 @@ import matplotlib
 from astropy.table import Table, Column
 
 from ics.cobraOps.Bench import Bench
+from ics.cobraOps.RandomTargetSelector import RandomTargetSelector
+from ics.cobraOps.TargetGroup import TargetGroup
 from ics.cobraOps.CobrasCalibrationProduct import CobrasCalibrationProduct
 from ics.cobraOps.CollisionSimulator import CollisionSimulator
+from ics.cobraOps.cobraConstants import NULL_TARGET_POSITION, NULL_TARGET_ID, NULL_TARGET_INDEX
 
 DIST_TYPES = OrderedDict()
 DIST_TYPES["hom"] = "Homogeneous distribution."
@@ -44,6 +47,21 @@ def dist_hom(args):
             Column(tt, name="Object Type", dtype=str, format="20s")]
     return Table( cc )
 
+def filterTargets(args, bench):
+    import ets_fiber_assigner.netflow as nf
+
+    # compute focal plane positions
+    tgt = nf.readScientificFromFile(args.out_file_name, 'sci')
+    telescope = nf.Telescope(args.tel_ra, args.tel_dec, args.tel_pos_ang, args.tel_obs_time)
+    tpos = telescope.get_fp_positions(tgt)
+    print("read", tpos.shape[0], "targets")
+    sel = RandomTargetSelector(bench,TargetGroup(tpos))
+    sel.calculateAccessibleTargets()
+    tgtidx = sel.accessibleTargetIndices.copy().flatten()
+    tgtidx = tgtidx[tgtidx!=NULL_TARGET_INDEX]
+    bc = np.bincount(tgtidx, minlength=tpos.shape[0])
+    return (bc==1)
+    
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-v", "--verbose", help="increase output verbosity",
@@ -90,6 +108,8 @@ parser.add_argument("--tel_pos_ang", type=float, default=0.,
                     help="Only used for plotting. Telescop position angle [Deg.].")
 parser.add_argument("--tel_obs_time", type=str, default= "2016-04-03T08:00:00Z",
                     help="Only used for plotting. Telescope observation time [ \"2016-04-03T08:00:00Z\"].")
+parser.add_argument("--select-single-cobra", 
+                    help="only select targets that can be seen from exactly one Cobra", action="store_true")
 
 args = parser.parse_args()
 
@@ -98,27 +118,32 @@ if not args.type in DIST_TYPES.keys():
           'Unknow distribution type "-t", expected is either of: {}.'.format(", ".join(DIST_TYPES.keys()) ))
   sys.exit(1)
 
+if args.tel_ra == None:
+    print("Option tel_ra not set, setting to {:.6f}".format(args.ra))
+    args.tel_ra = args.ra
+if args.tel_dec == None:
+    print("Option tel_dec not set, setting to {:.6f}".format(args.dec))
+    args.tel_dec = args.dec
+
+if args.bench_xml == "":
+    print("WARNING: Using default bench for visualisation.")
+    bench = Bench(layout="full")
+else:
+    bench = Bench(calibrationProduct=CobrasCalibrationProduct( args.bench_xml ))
+
 if args.type == "hom":
     t = dist_hom(args)
     t.write(args.out_file_name, format="ascii.ecsv", overwrite=True)
 
+if args.select_single_cobra:
+    # select targets that are accessible from exactly one Cobra
+    selection = filterTargets(args, bench)
+    t = t[selection]
+    t.write(args.out_file_name, format="ascii.ecsv", overwrite=True)
 
 if args.plot:
     from matplotlib import pyplot as plt
     import ets_fiber_assigner.netflow as nf
-
-    if args.tel_ra == None:
-        print("Option tel_ra not set, setting to {:.6f}".format(args.ra))
-        args.tel_ra = args.ra
-    if args.tel_dec == None:
-        print("Option tel_dec not set, setting to {:.6f}".format(args.dec))
-        args.tel_dec = args.dec
-
-    if args.bench_xml == "":
-        print("WARNING: Using default bench for visualisation.")
-        bench = Bench(layout="full")
-    else:
-        bench = Bench(calibrationProduct=CobrasCalibrationProduct( args.bench_xml ))
 
     # compute focal plane positions
     tgt = nf.readScientificFromFile(args.out_file_name, 'sci')
