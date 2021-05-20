@@ -179,7 +179,7 @@ if args.select_single_cobra:
     t = t[selection]
     t.write(args.out_file_name, format="ascii.ecsv", overwrite=True)
 
-write_to_pfsdesign(args, t)
+#write_to_pfsdesign(args, t)
 
 if args.plot:
     from matplotlib import pyplot as plt

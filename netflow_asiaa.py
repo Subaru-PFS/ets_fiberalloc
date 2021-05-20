@@ -33,10 +33,10 @@ tgt += nf.readCalibrationFromFile(fcal_stars, "cal")
 tgt += nf.readCalibrationFromFile(fsky_pos, "sky")
 
 # get a complete, idealized focal plane configuration
-bench = Bench(layout="full")
+#bench = Bench(layout="full")
 # if you have the XML file, you can also generate a more realistic focal plane
-# bench = Bench(calibrationProduct=CobrasCalibrationProduct(
-#     "../ics_cobraOps/python/ics/demos/updatedMaps6.xml"))
+bench = Bench(calibrationProduct=CobrasCalibrationProduct(
+     "data/2020-10-15-theta-slow.xml"))
 
 # point the telescope at the center of all science targets
 raTel, decTel = nf.telescopeRaDecFromFile(fscience_targets)
@@ -101,7 +101,7 @@ while not done:
     prob = nf.buildProblem(bench, tgt, tpos, classdict, t_obs,
                            vis_cost, cobraMoveCost=cobraMoveCost,
                            collision_distance=2., elbow_collisions=True,
-                           gurobi=True, gurobiOptions=gurobiOptions,
+                           gurobi=False, gurobiOptions=gurobiOptions,
                            alreadyObserved=alreadyObserved,
                            forbiddenPairs=forbiddenPairs)
 
@@ -148,6 +148,21 @@ while not done:
 
     print("trajectory collisions found:", ncoll)
     done = ncoll == 0
+
+for vis, tp in zip(res, tpos):
+    selectedTargets = np.full(len(bench.cobras.centers), NULL_TARGET_POSITION)
+    ids = np.full(len(bench.cobras.centers), NULL_TARGET_ID)
+    for tidx, cidx in vis.items():
+        selectedTargets[cidx] = tp[tidx]
+        ids[cidx] = ""
+    for i in range(selectedTargets.size):
+        if selectedTargets[i] != NULL_TARGET_POSITION:
+            dist = np.abs(selectedTargets[i]-bench.cobras.centers[i])
+
+    simulator = CollisionSimulator(bench, TargetGroup(selectedTargets, ids))
+    simulator.run()
+    simulator.plotResults(paintFootprints=False)
+    plotUtils.pauseExecution()
 
 # write output file
 with open("output.txt", "w") as f:
@@ -206,7 +221,9 @@ with open("output.txt", "w") as f:
                 psfFluxErr=[[np.nan]] * N,
                 totalFluxErr=[[np.nan]] * N,
                 filterNames=[['g']] * N,
-                pfiNominal=pfiNominal
+                pfiNominal=pfiNominal,
+                arms=None,
+                guideStars=None
                 )
         pfsDesign = datamodel.PfsDesign(**d)
         pfsDesign.write(dirName='.', fileName="pfsdesign_exp{:03d}.fits".format(i))
