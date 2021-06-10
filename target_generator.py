@@ -20,6 +20,59 @@ DIST_TYPES["hom"] = "Homogeneous distribution."
 DIST_TYPES["fib"] = "One per cobra."
 DIST_TYPES["exp"] = "Exponential dropoff."
 
+
+def getBench():
+    import os
+    from procedures.moduleTest.cobraCoach import CobraCoach
+    os.environ["PFS_INSTDATA_DIR"] = "/home/martin/codes/pfs_instdata"
+    cobraCoach = CobraCoach(
+        "fpga", loadModel=False, trajectoryMode=True,
+        rootDir="/home/martin/codes/efa/")
+    cobraCoach.loadModel(version="ALL", moduleVersion="final_20210512")
+    
+    # Get the calibration product
+    calibrationProduct = cobraCoach.calibModel
+    
+    # Set some dummy center positions and phi angles for those cobras that have
+    # zero centers
+    zeroCenters = calibrationProduct.centers == 0
+    calibrationProduct.centers[zeroCenters] = np.arange(np.sum(zeroCenters)) * 300j
+    calibrationProduct.phiIn[zeroCenters] = -np.pi
+    calibrationProduct.phiOut[zeroCenters] = 0
+    print("Cobras with zero centers: %i" % np.sum(zeroCenters))
+    
+    # Transform the calibration product cobra centers and link lengths units from
+    # pixels to millimeters
+    calibrationProduct.centers -= 5048.0 + 3597.0j
+    calibrationProduct.centers *= np.exp(1j * np.deg2rad(1.0)) / 13.02
+    calibrationProduct.L1 /= 13.02
+    calibrationProduct.L2 /= 13.02
+    
+    # Use the median value link lengths in those cobras with zero link lengths
+    zeroLinkLengths = np.logical_or(
+        calibrationProduct.L1 == 0, calibrationProduct.L2 == 0)
+    calibrationProduct.L1[zeroLinkLengths] = np.median(
+        calibrationProduct.L1[~zeroLinkLengths])
+    calibrationProduct.L2[zeroLinkLengths] = np.median(
+        calibrationProduct.L2[~zeroLinkLengths])
+    print("Cobras with zero link lenghts: %i" % np.sum(zeroLinkLengths))
+    
+    # Use the median value link lengths in those cobras with too long link lengths
+    tooLongLinkLengths = np.logical_or(
+        calibrationProduct.L1 > 100, calibrationProduct.L2 > 100)
+    calibrationProduct.L1[tooLongLinkLengths] = np.median(
+        calibrationProduct.L1[~tooLongLinkLengths])
+    calibrationProduct.L2[tooLongLinkLengths] = np.median(
+        calibrationProduct.L2[~tooLongLinkLengths])
+    print("Cobras with too long link lenghts: %i" % np.sum(tooLongLinkLengths))
+   
+    # Create the bench instance
+    bench = Bench(layout="calibration", calibrationProduct=calibrationProduct)
+    print("Number of cobras:", bench.cobras.nCobras)
+
+    return cobraCoach, bench
+
+
 def dist_hom(args):
     """ implements homogeneous target distribution """
     s = args.radius * 2.
@@ -133,8 +186,6 @@ parser.add_argument("-Z", "--redshift_max", type=float, default=3.,
                     help="Maximum redshift.")
 parser.add_argument("-o", "--out_file_name", type=str, default="test.dat",
                     help="Output file name.")
-parser.add_argument("-x", "--bench_xml", type=str, default="",
-                    help="Cobra bench XML.")
 
 parser.add_argument("--plot", 
                     help="Visualize targets.", action="store_true")
@@ -163,11 +214,7 @@ if args.tel_dec == None:
     print("Option tel_dec not set, setting to {:.6f}".format(args.dec))
     args.tel_dec = args.dec
 
-if args.bench_xml == "":
-    print("WARNING: Using default bench for visualisation.")
-    bench = Bench(layout="full")
-else:
-    bench = Bench(calibrationProduct=CobrasCalibrationProduct( args.bench_xml ))
+cobraCoach, bench = getBench()
 
 if args.type == "hom":
     t = dist_hom(args)

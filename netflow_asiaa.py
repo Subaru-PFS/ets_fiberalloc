@@ -9,10 +9,64 @@ import ets_fiber_assigner.netflow as nf
 from ics.cobraOps.Bench import Bench
 from ics.cobraOps.TargetGroup import TargetGroup
 from ics.cobraOps.CobrasCalibrationProduct import CobrasCalibrationProduct
-from ics.cobraOps.CollisionSimulator import CollisionSimulator
+from ics.cobraOps.CollisionSimulator2 import CollisionSimulator2
+from procedures.moduleTest.cobraCoach import CobraCoach
 from ics.cobraOps.cobraConstants import NULL_TARGET_POSITION, NULL_TARGET_ID
 from ics.cobraOps import plotUtils
 from pfs import datamodel
+
+
+def getBench():
+    import os
+    from procedures.moduleTest.cobraCoach import CobraCoach
+    os.environ["PFS_INSTDATA_DIR"] = "/home/martin/codes/pfs_instdata"
+    cobraCoach = CobraCoach(
+        "fpga", loadModel=False, trajectoryMode=True,
+        rootDir="/home/martin/codes/efa/")
+    cobraCoach.loadModel(version="ALL", moduleVersion="final_20210512")
+    
+    # Get the calibration product
+    calibrationProduct = cobraCoach.calibModel
+    
+    # Set some dummy center positions and phi angles for those cobras that have
+    # zero centers
+    zeroCenters = calibrationProduct.centers == 0
+    calibrationProduct.centers[zeroCenters] = np.arange(np.sum(zeroCenters)) * 300j
+    calibrationProduct.phiIn[zeroCenters] = -np.pi
+    calibrationProduct.phiOut[zeroCenters] = 0
+    print("Cobras with zero centers: %i" % np.sum(zeroCenters))
+    
+    # Transform the calibration product cobra centers and link lengths units from
+    # pixels to millimeters
+    calibrationProduct.centers -= 5048.0 + 3597.0j
+    calibrationProduct.centers *= np.exp(1j * np.deg2rad(1.0)) / 13.02
+    calibrationProduct.L1 /= 13.02
+    calibrationProduct.L2 /= 13.02
+    
+    # Use the median value link lengths in those cobras with zero link lengths
+    zeroLinkLengths = np.logical_or(
+        calibrationProduct.L1 == 0, calibrationProduct.L2 == 0)
+    calibrationProduct.L1[zeroLinkLengths] = np.median(
+        calibrationProduct.L1[~zeroLinkLengths])
+    calibrationProduct.L2[zeroLinkLengths] = np.median(
+        calibrationProduct.L2[~zeroLinkLengths])
+    print("Cobras with zero link lenghts: %i" % np.sum(zeroLinkLengths))
+    
+    # Use the median value link lengths in those cobras with too long link lengths
+    tooLongLinkLengths = np.logical_or(
+        calibrationProduct.L1 > 100, calibrationProduct.L2 > 100)
+    calibrationProduct.L1[tooLongLinkLengths] = np.median(
+        calibrationProduct.L1[~tooLongLinkLengths])
+    calibrationProduct.L2[tooLongLinkLengths] = np.median(
+        calibrationProduct.L2[~tooLongLinkLengths])
+    print("Cobras with too long link lenghts: %i" % np.sum(tooLongLinkLengths))
+   
+    # Create the bench instance
+    bench = Bench(layout="calibration", calibrationProduct=calibrationProduct)
+    print("Number of cobras:", bench.cobras.nCobras)
+
+    return cobraCoach, bench
+
 
 # make runs reproducible
 np.random.seed(20)
@@ -33,10 +87,7 @@ tgt += nf.readCalibrationFromFile(fcal_stars, "cal")
 tgt += nf.readCalibrationFromFile(fsky_pos, "sky")
 
 # get a complete, idealized focal plane configuration
-#bench = Bench(layout="full")
-# if you have the XML file, you can also generate a more realistic focal plane
-bench = Bench(calibrationProduct=CobrasCalibrationProduct(
-     "data/2020-10-15-theta-slow.xml"))
+cobraCoach, bench = getBench()
 
 # point the telescope at the center of all science targets
 raTel, decTel = nf.telescopeRaDecFromFile(fscience_targets)
@@ -132,7 +183,7 @@ while not done:
             if selectedTargets[i] != NULL_TARGET_POSITION:
                 dist = np.abs(selectedTargets[i]-bench.cobras.centers[i])
 
-        simulator = CollisionSimulator(bench, TargetGroup(selectedTargets, ids))
+        simulator = CollisionSimulator2(bench, cobraCoach, TargetGroup(selectedTargets, ids))
         simulator.run()
         if np.any(simulator.endPointCollisions):
             print("ERROR: detected end point collision, which should be impossible")
@@ -159,7 +210,7 @@ for vis, tp in zip(res, tpos):
         if selectedTargets[i] != NULL_TARGET_POSITION:
             dist = np.abs(selectedTargets[i]-bench.cobras.centers[i])
 
-    simulator = CollisionSimulator(bench, TargetGroup(selectedTargets, ids))
+    simulator = CollisionSimulator2(bench, cobraCoach, TargetGroup(selectedTargets, ids))
     simulator.run()
     simulator.plotResults(paintFootprints=False)
     plotUtils.pauseExecution()
