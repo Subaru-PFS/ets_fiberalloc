@@ -1,4 +1,3 @@
-from __future__ import print_function
 import numpy as np
 from collections import defaultdict
 from astropy.table import Table
@@ -596,7 +595,7 @@ def readScientificFromFile(file, prefix):
             if not l.startswith("#"):
                 tt = l.split()
                 id_, ra, dec, tm, pri = (
-                    str(tt[0]), float(tt[1]), float(tt[2]),
+                    str(tt[0])[1:], float(tt[1]), float(tt[2]),
                     float(tt[3]), int(tt[4]))
                 res.append(ScienceTarget(id_, ra, dec, tm, pri, prefix))
     return res
@@ -633,6 +632,6 @@ def readCalibrationFromFile(file, targetclass):
         for l in ll[1:]:
             if not l.startswith("#"):
                 tt = l.split()
-                id_, ra, dec = (str(tt[0]), float(tt[1]), float(tt[2]))
+                id_, ra, dec = (str(tt[0])[1:], float(tt[1]), float(tt[2]))
                 res.append(CalibTarget(id_, ra, dec, targetclass))
     return res

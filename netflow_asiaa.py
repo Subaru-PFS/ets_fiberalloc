@@ -1,10 +1,8 @@
-from __future__ import print_function
-
 import numpy as np
-import sys
 from collections import defaultdict
 
 import ets_fiber_assigner.netflow as nf
+import ets_fiber_assigner.io_helpers
 
 from ics.cobraOps.Bench import Bench
 from ics.cobraOps.TargetGroup import TargetGroup
@@ -13,7 +11,6 @@ from ics.cobraOps.CollisionSimulator2 import CollisionSimulator2
 from procedures.moduleTest.cobraCoach import CobraCoach
 from ics.cobraOps.cobraConstants import NULL_TARGET_POSITION, NULL_TARGET_ID
 from ics.cobraOps import plotUtils
-from pfs import datamodel
 
 
 def getBench():
@@ -89,8 +86,10 @@ tgt += nf.readCalibrationFromFile(fsky_pos, "sky")
 # get a complete, idealized focal plane configuration
 cobraCoach, bench = getBench()
 
+#telescope = inputParamsFromPfsDesign("", ".")
+
 # point the telescope at the center of all science targets
-raTel, decTel = nf.telescopeRaDecFromFile(fscience_targets)
+raTel, decTel = 0.0, 0.0
 posang = 0.
 otime = "2016-04-03T08:00:00Z"
 telescopes = []
@@ -100,8 +99,8 @@ nvisit = 1
 
 # generate randomly jittered telescope pointings for every observation
 for _ in range(nvisit):
-    telescopes.append(nf.Telescope(raTel+np.random.normal()*1e-2,
-                      decTel+np.random.normal()*1e-2, posang, otime))
+    telescopes.append(nf.Telescope(raTel,
+                      decTel, posang, otime))
 
 # get focal plane positions for all targets and all visits
 tpos = [tele.get_fp_positions(tgt) for tele in telescopes]
@@ -234,49 +233,12 @@ with open("output.txt", "w") as f:
         for cls, num in tdict.items():
             print("   {}: {}".format(cls, num))
 
-        # Write PFS design
-        N = len(vis.items())
-        ra = []
-        dec = []
-        pfiNominal = []
-        fiberId = []
-        objId = []
-        targetType = []
+        ets_fiber_assigner.io_helpers.writePfsDesign(
+            pfsDesignId=i,
+            pfsDesignDirectory='.',
+            vis=vis,
+            tp=tp,
+            tel=tel,
+            tgt=tgt,
+            classdict=tclassdict)
 
-        for tidx, cidx in vis.items():
-            tdict[tgt[tidx].targetclass] += 1
-            ra.append(tgt[tidx].ra)
-            dec.append(tgt[tidx].dec)
-            fiberId.append(cidx)
-            objId.append(tgt[tidx].ID)
-            pfiNominal.append([ tp[tidx].real, tp[tidx].imag ])
-            targetType.append( tclassdict[ tgt[tidx].targetclass ] )
-
-        d = dict(pfsDesignId = 0,
-                raBoresight=tel._ra,
-                decBoresight=tel._dec,
-                posAng=tel._posang,
-                fiberId=fiberId,
-                tract=[np.nan] * N,
-                patch=["nan,np.nan"] * N,
-                ra=ra,
-                dec=dec,
-                catId=[np.nan] * N,
-                objId=objId,
-                targetType=targetType,
-                fiberStatus=[1] * N,
-                fiberFlux=[[np.nan]] * N,
-                psfFlux=[[np.nan]] * N,
-                totalFlux=[[np.nan]] * N,
-                fiberFluxErr=[[np.nan]] * N,
-                psfFluxErr=[[np.nan]] * N,
-                totalFluxErr=[[np.nan]] * N,
-                filterNames=[['g']] * N,
-                pfiNominal=pfiNominal,
-                arms=None,
-                guideStars=None
-                )
-        pfsDesign = datamodel.PfsDesign(**d)
-        pfsDesign.write(dirName='.', fileName="pfsdesign_exp{:03d}.fits".format(i))
-
-sys.exit(0)

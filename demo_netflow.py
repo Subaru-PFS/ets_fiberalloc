@@ -1,4 +1,3 @@
-from __future__ import print_function
 import ets_fiber_assigner.netflow as nf
 import numpy as np
 from ics.cobraOps.Bench import Bench
