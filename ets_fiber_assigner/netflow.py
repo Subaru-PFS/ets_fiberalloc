@@ -375,13 +375,23 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
             keys = Tv_o.keys()
             keys = set(key[0] for key in keys if key[1] == ivis)
             for p in forbiddenPairs[ivis]:
-                if p[0] in keys and p[1] in keys:
-                    flows = [v[0] for v in
-                             Tv_o[(p[0], ivis)] + Tv_o[(p[1], ivis)]]
-                    tname0 = targets[p[0]].ID
-                    tname1 = targets[p[1]].ID
-                    constr.append([makeName("forbiddenPair_", tname0, tname1, ivis),
-                                   prob.sum(flows) <= 1])
+                if len(p) == 2:
+                    if p[0] in keys and p[1] in keys:
+                        flows = [v[0] for v in
+                                 Tv_o[(p[0], ivis)] + Tv_o[(p[1], ivis)]]
+                        tname0 = targets[p[0]].ID
+                        tname1 = targets[p[1]].ID
+                        constr.append([makeName("forbiddenPair_", tname0, tname1, ivis),
+                                       prob.sum(flows) <= 1])
+                elif len(p) == 1:
+                    if p[0] in keys:
+                        flows = [v[0] for v in Tv_o[(p[0], ivis)]]
+                        tname0 = targets[p[0]].ID
+                        constr.append([makeName("forbiddenPair_", tname0, ivis),
+                                       prob.sum(flows) == 0])
+                else:
+                    raise RuntimeError("oops")
+                   
 
     for c in constr:
         prob.add_constraint(c[0], c[1])
