@@ -52,12 +52,15 @@ Create a work directory:
 
 	mkdir fiber_allocation
 	cd fiber_allocation
+	
+Download the fiber allocation code:
+	git clone -b commissioning_demo git@github.com:Subaru-PFS/ets_fiberalloc.git
 
 Create a subdirectory to host the actual pfs_designs:
 
 	mkdir commissioning
 	cd commissioning
-	cp WHEREVER_YOU_DOWNLOADED_IT/commissioning.py .
+	cp ../ets_fiberalloc/commissioning.py .
 	cd ..
   
 Install pip-installable prerequisites:
@@ -76,8 +79,7 @@ Do
 	
 OR just
 
-	cp WHEREVER_YOU_DOWNLOADED_IT/requirements.txt .
-	python -m pip install -r requirements.txt
+	python -m pip install -r ets_fiberalloc/requirements.txt
 
 
 Install PFS specific prerequisites:
@@ -89,7 +91,6 @@ Install PFS specific prerequisites:
 	git clone https://github.com/Subaru-PFS/ics_cobraCharmer
 	git clone https://github.com/Subaru-PFS/pfs_instdata
 	git clone -b tickets/FIBERALLOC-28 git@github.com:Subaru-PFS/ets_shuffle.git
-	git clone -b commissioning_demo git@github.com:Subaru-PFS/ets_fiberalloc.git
 	git clone -b tickets/INSTRM-1037 git@github.com:Subaru-PFS/pfs_utils.git
   
 	cd datamodel/
