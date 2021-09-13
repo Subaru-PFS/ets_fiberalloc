@@ -5,18 +5,39 @@ and then run netflow and shuffle. The result is a pfs_design file.
 
 # Caveats
 A number of workarounds were necessary to deal with current shortcomings:
-* Some link lengths have unexpected values, we currently set them to a median value
-* Broken cobras have no link lengths assigned with them, we remove them by placing them outside of the 
-focal plane
-* The black dot positions are currently not taken from an actual measurement but a nominal position is used.
+* The code reads the cobra information from the file
+ALL_final_20210512.xml stored in pfs_instdata.
+It is still not clear if that contains the last measured information. Maybe it should be downloaded from somewhere else?
+* The data stored in ALL_final_20210512.xml is not correct for some of
+the cobras and cobraops does adapts it in order to be able to run the collision simulations:
+   * The cobra centers for bad cobras is set to zero --> Cobraops
+sets the positions to be outside the PFI field of view, so colliding with those cobras is
+impossible. That's not true and should be fixed in the XML.
+   * Link lengths are zero for some cobras --> Cobraops sets those
+lengths to the median value measured for the rest of the cobras.
+   * Link lengths are too large for some cobras, probably associated
+to bad measurements --> Cobraops sets those lengths to the median value measured for the rest of the cobras.
+* Length units in the xml are expressed in camera pixel units. Cobraops
+transforms them to mm using some formulas provided by Chi-Hung. Maybe there should be a method in
+pfs_utils to do that?
+* Cobraops sets the position of those cobras not assigned to targets to
+their home position. Maybe a different strategy should be use to avoid fiber-to-elbow collisions.
+Thus, unless also a sufficiently large number of sky positions are give (which this
+example will not take care of) there will be unassigned fibers in the
+pfs_design file. Endpoint and trajectory collisions are only handled (and
+avoided) for the allocated fibers.  Appropriate measures in the down stream
+processing and cobra commanding must be takes to avoid collisions.
+* Cobraops uses cobracharmer to calculate the cobras trajectories using
+the following method:
+https://github.com/Subaru-PFS/ics_cobraOps/blob/master/python/ics/cobraOps/CollisionSimulator2.py#L107
+We should make sure that this is the same method/strategy used to
+move the cobras.
+* The position of the black spots is hard-coded  in cobraops and is
+probably not correct. We should find a method to read those positions from the database or pfs_instdata.
 * It is possible that a cobra can reach below the black dot of a neighboring
 cobra. This is currently not caught and no light will be observed from the
 associated object.
-* Unless also a sufficiently large number of sky positions are give (which this
-example will not take care of) there will be unassigned fibers in the
-pfs_design file.  Endpoint and trajectory collisions are only handled (and
-avoided) for the allocated fibers.  Appropriate measures in the down stream
-processing and cobra commanding must be takes to avoid collisions.
+
 
 # Installation
 ## Choice of optimiser
