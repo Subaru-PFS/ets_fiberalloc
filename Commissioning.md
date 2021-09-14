@@ -111,8 +111,8 @@ Install PFS specific prerequisites:
 	git clone https://github.com/Subaru-PFS/datamodel.git
 	git clone https://github.com/Subaru-PFS/ics_cobraCharmer
 	git clone https://github.com/Subaru-PFS/pfs_instdata
-	git clone -b tickets/FIBERALLOC-28 git@github.com:Subaru-PFS/ets_shuffle.git
-	git clone -b tickets/INSTRM-1037 git@github.com:Subaru-PFS/pfs_utils.git
+	git clone git@github.com:Subaru-PFS/ets_shuffle.git
+	git clone git@github.com:Subaru-PFS/pfs_utils.git
   
 	cd datamodel/
 	pip install -e .
@@ -139,6 +139,10 @@ Minimal at RA = 0 Deg and Dec = 0 Deg.:
 More realistic example with gurobi:
 
 	python commissioning.py --use_gurobi True --ra 56.745 --dec 24.113 --pa 0
+
+(CAUTION: due to some weird logic in the "argparse" package, you have to
+completely omit the "--use_gurobi" flag if you don't want to use Gurobi.
+Specifying "--use_gurobi False" will NOT do the trick ...)
 
 Help arguments:
 

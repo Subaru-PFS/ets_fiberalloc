@@ -4,9 +4,7 @@
 #
 # This script depends on several other modules from https://github.com/Subaru-PFS
 # All of them were at the HEAD of the respective master branches, with the
-# exception of "pfs_utils" (must be on branch "tickets/INSTRM-1037"),
-# "ets_fiber_assigner" (must be on branch "commissioning_demo"),
-# and "ets_shuffle" (must be on branch "tickets/FIBERALLOC-28")
+# exception of "ets_fiber_assigner" (must be on branch "commissioning_demo").
 #
 # Also the "pulp" Python package (vrsion 1.6!) is required to solve the fiber assignment
 # problem.
