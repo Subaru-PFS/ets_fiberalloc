@@ -122,6 +122,10 @@ class GurobiProblem(LPProblem):
         self._constraintdict[name] = constraint
         self._prob.addConstr(constraint)
 
+    def add_lazy_constraint(self, name, constraint):
+        constraint.Lazy = 1
+        self.add_constraint(name, constraint)
+
     @staticmethod
     def value(var):
         return var.X
@@ -169,6 +173,9 @@ class PulpProblem(LPProblem):
     def add_constraint(self, name, constraint):
         self._constraintdict[name] = constraint
         self._constr.append(constraint)
+
+    def add_lazy_constraint(self, name, constraint):
+        self.add_constraint(name, constraint)
 
     @staticmethod
     def value(var):
@@ -394,7 +401,9 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                    
 
     for c in constr:
-        prob.add_constraint(c[0], c[1])
+        # We add the collision constraints as lazy in the hope that this will
+        # speed up the solution
+        prob.add_lazy_constraint(c[0], c[1])
 
     # every Cobra can observe at most one target per visit
     for key, inflow in Cv_i.items():
