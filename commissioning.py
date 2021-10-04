@@ -248,6 +248,7 @@ def add_guidestars(args):
     from pfs.utils.coordinates.CoordTransp import CoordinateTransform as ctrans
     from pfs.utils.coordinates.CoordTransp import ag_pfimm_to_pixel
     import matplotlib.path as mppath
+    from astropy.time import Time
 
     input_design = pfs.datamodel.PfsDesign.read(args.run_id, args.design_dir)
     raTel_deg, decTel_deg, pa_deg = input_design.raBoresight, input_design.decBoresight, input_design.posAng
@@ -287,11 +288,11 @@ def add_guidestars(args):
     # potentially too-bright neighbours
 
     # adjust for proper motion
-    obs_year = float(obs_time[0:4])
+    epoch = Time(args.observation_time).jyear
     res[racol], res[deccol] = \
         update_coords_for_proper_motion(res[racol], res[deccol],
                                         res[coldict["pmra"]],
-                                        res[coldict["pmdec"]], 2000., obs_year)
+                                        res[coldict["pmdec"]], 2015.5, epoch)
 
     # compute PFI coordinates
     tmp = np.array([res[racol], res[deccol]])
@@ -359,7 +360,7 @@ def add_guidestars(args):
 
     ntgt = len(targets[coldict["id"]])
     guidestars = pfs.datamodel.guideStars.GuideStars(targets[coldict["id"]],
-                                          np.array([0.]*ntgt), # epoch
+                                          np.array([epoch]*ntgt), # epoch
                                           targets[coldict["ra"]],
                                           targets[coldict["dec"]],
                                           targets[coldict["pmra"]],
