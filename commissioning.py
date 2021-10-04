@@ -26,7 +26,7 @@ def getBench(args):
     cobraCoach = CobraCoach(
         "fpga", loadModel=False, trajectoryMode=True,
         rootDir=args.cobra_coach_dir)
-    cobraCoach.loadModel(version="ALL", moduleVersion="final_20210512")
+    cobraCoach.loadModel(version="ALL", moduleVersion="final_20210920_mm")
     
     # Get the calibration product
     calibrationProduct = cobraCoach.calibModel
@@ -39,12 +39,12 @@ def getBench(args):
     calibrationProduct.phiOut[zeroCenters] = 0
     print("Cobras with zero centers: %i" % np.sum(zeroCenters))
     
-    # Transform the calibration product cobra centers and link lengths units from
-    # pixels to millimeters
-    calibrationProduct.centers -= 5048.0 + 3597.0j
-    calibrationProduct.centers *= np.exp(1j * np.deg2rad(1.0)) / 13.02
-    calibrationProduct.L1 /= 13.02
-    calibrationProduct.L2 /= 13.02
+    # # Transform the calibration product cobra centers and link lengths units from
+    # # pixels to millimeters
+    # calibrationProduct.centers -= 5048.0 + 3597.0j
+    # calibrationProduct.centers *= np.exp(1j * np.deg2rad(1.0)) / 13.02
+    # calibrationProduct.L1 /= 13.02
+    # calibrationProduct.L2 /= 13.02
     
     # Use the median value link lengths in those cobras with zero link lengths
     zeroLinkLengths = np.logical_or(
