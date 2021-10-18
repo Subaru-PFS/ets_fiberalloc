@@ -26,7 +26,7 @@ def getBench(args):
     cobraCoach = CobraCoach(
         "fpga", loadModel=False, trajectoryMode=True,
         rootDir=args.cobra_coach_dir)
-    cobraCoach.loadModel(version="ALL", moduleVersion="final_20210920_mm")
+    cobraCoach.loadModel(version="ALL", moduleVersion=args.cobra_coach_module_version)
     
     # Get the calibration product
     calibrationProduct = cobraCoach.calibModel
@@ -38,14 +38,7 @@ def getBench(args):
     calibrationProduct.phiIn[zeroCenters] = -np.pi
     calibrationProduct.phiOut[zeroCenters] = 0
     print("Cobras with zero centers: %i" % np.sum(zeroCenters))
-    
-    # # Transform the calibration product cobra centers and link lengths units from
-    # # pixels to millimeters
-    # calibrationProduct.centers -= 5048.0 + 3597.0j
-    # calibrationProduct.centers *= np.exp(1j * np.deg2rad(1.0)) / 13.02
-    # calibrationProduct.L1 /= 13.02
-    # calibrationProduct.L2 /= 13.02
-    
+        
     # Use the median value link lengths in those cobras with zero link lengths
     zeroLinkLengths = np.logical_or(
         calibrationProduct.L1 == 0, calibrationProduct.L2 == 0)
@@ -90,6 +83,8 @@ def get_arguments():
 
     parser.add_argument("--use_gurobi", type=bool, default=False, help="use Gurobi solver instead of PuLP")
     parser.add_argument("--cobra_coach_dir", type=str, default=".", help="path for temporary cobraCoach files")
+
+    parser.add_argument("--cobra_coach_module_version", type=str, default="final_20210920_mm", help="version of the bench decription file")
 
     args = parser.parse_args()
     return args

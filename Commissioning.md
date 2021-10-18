@@ -5,10 +5,10 @@ and then run netflow and shuffle. The result is a pfs_design file.
 
 # Caveats
 A number of workarounds were necessary to deal with current shortcomings:
-* The code reads the cobra information from the file
-ALL_final_20210512.xml stored in pfs_instdata.
-It is still not clear if that contains the last measured information. Maybe it should be downloaded from somewhere else?
-* The data stored in ALL_final_20210512.xml is not correct for some of
+* By default, the code reads the cobra information from the file
+ALL_final_20210920_mm.xml stored in pfs_instdata.
+This can be overridden by setting the command line parameter `--cobra_coach_module_version` to something different from its default, which is `final_20210920_mm`.
+* The data stored in ALL_final_20210920_mm.xml is not correct for some of
 the cobras and cobraops does adapts it in order to be able to run the collision simulations:
    * The cobra centers for bad cobras is set to zero --> Cobraops
 sets the positions to be outside the PFI field of view, so colliding with those cobras is
@@ -17,9 +17,6 @@ impossible. That's not true and should be fixed in the XML.
 lengths to the median value measured for the rest of the cobras.
    * Link lengths are too large for some cobras, probably associated
 to bad measurements --> Cobraops sets those lengths to the median value measured for the rest of the cobras.
-* Length units in the xml are expressed in camera pixel units. Cobraops
-transforms them to mm using some formulas provided by Chi-Hung. Maybe there should be a method in
-pfs_utils to do that?
 * Cobraops sets the position of those cobras not assigned to targets to
 their home position. Maybe a different strategy should be use to avoid fiber-to-elbow collisions.
 Thus, unless also a sufficiently large number of sky positions are give (which this
