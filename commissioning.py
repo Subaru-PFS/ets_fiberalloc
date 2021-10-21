@@ -21,8 +21,9 @@ def getBench(args):
     import os
     from procedures.moduleTest.cobraCoach import CobraCoach
     from ics.cobraOps.Bench import Bench
+    from ics.cobraOps.BlackDotsCalibrationProduct import BlackDotsCalibrationProduct
 
-#    os.environ["PFS_INSTDATA_DIR"] = "/home/martin/codes/pfs_instdata"
+    os.environ["PFS_INSTDATA_DIR"] = "/home/martin/codes/pfs_instdata"
     cobraCoach = CobraCoach(
         "fpga", loadModel=False, trajectoryMode=True,
         rootDir=args.cobra_coach_dir)
@@ -57,8 +58,13 @@ def getBench(args):
         calibrationProduct.L2[~tooLongLinkLengths])
     print("Cobras with too long link lenghts: %i" % np.sum(tooLongLinkLengths))
    
+    calibrationFileName = os.path.join(
+        os.environ["PFS_INSTDATA_DIR"],"data/pfi/dot", "black_dots_mm.csv")
+    blackDotsCalibrationProduct = BlackDotsCalibrationProduct(calibrationFileName)
+
     # Create the bench instance
-    bench = Bench(layout="calibration", calibrationProduct=calibrationProduct)
+    bench = Bench(layout="calibration", calibrationProduct=calibrationProduct,
+                  blackDotsCalibrationProduct=blackDotsCalibrationProduct)
     print("Number of cobras:", bench.cobras.nCobras)
 
     return cobraCoach, bench
