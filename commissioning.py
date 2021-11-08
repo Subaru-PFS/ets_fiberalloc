@@ -16,7 +16,7 @@ import argparse
 
 
 # This was needed for fixing some issues with the XML files.
-# Can probably be simplified. Javier? 
+# Can probably be simplified. Javier?
 def getBench(args):
     import os
     from procedures.moduleTest.cobraCoach import CobraCoach
@@ -28,10 +28,10 @@ def getBench(args):
         "fpga", loadModel=False, trajectoryMode=True,
         rootDir=args.cobra_coach_dir)
     cobraCoach.loadModel(version="ALL", moduleVersion=args.cobra_coach_module_version)
-    
+
     # Get the calibration product
     calibrationProduct = cobraCoach.calibModel
-    
+
     # Set some dummy center positions and phi angles for those cobras that have
     # zero centers
     zeroCenters = calibrationProduct.centers == 0
@@ -39,7 +39,7 @@ def getBench(args):
     calibrationProduct.phiIn[zeroCenters] = -np.pi
     calibrationProduct.phiOut[zeroCenters] = 0
     print("Cobras with zero centers: %i" % np.sum(zeroCenters))
-        
+
     # Use the median value link lengths in those cobras with zero link lengths
     zeroLinkLengths = np.logical_or(
         calibrationProduct.L1 == 0, calibrationProduct.L2 == 0)
@@ -48,7 +48,7 @@ def getBench(args):
     calibrationProduct.L2[zeroLinkLengths] = np.median(
         calibrationProduct.L2[~zeroLinkLengths])
     print("Cobras with zero link lenghts: %i" % np.sum(zeroLinkLengths))
-    
+
     # Use the median value link lengths in those cobras with too long link lengths
     tooLongLinkLengths = np.logical_or(
         calibrationProduct.L1 > 100, calibrationProduct.L2 > 100)
@@ -57,7 +57,7 @@ def getBench(args):
     calibrationProduct.L2[tooLongLinkLengths] = np.median(
         calibrationProduct.L2[~tooLongLinkLengths])
     print("Cobras with too long link lenghts: %i" % np.sum(tooLongLinkLengths))
-   
+
     calibrationFileName = os.path.join(
         os.environ["PFS_INSTDATA_DIR"],"data/pfi/dot", "black_dots_mm.csv")
     blackDotsCalibrationProduct = BlackDotsCalibrationProduct(calibrationFileName)
@@ -199,7 +199,7 @@ def gen_assignment(args):
             for i in range(selectedTargets.size):
                 if selectedTargets[i] != NULL_TARGET_POSITION:
                     dist = np.abs(selectedTargets[i]-bench.cobras.centers[i])
-    
+
             simulator = CollisionSimulator2(bench, cobraCoach, TargetGroup(selectedTargets, ids))
             simulator.run()
 # If you want to see the result of the collision simulator, uncomment the next three lines
@@ -216,14 +216,14 @@ def gen_assignment(args):
                     coll_tidx.append(tidx)
             ncoll += len(coll_tidx)
             for i1 in range(0,len(coll_tidx)):
-                found = False  
+                found = False
                 for i2 in range(i1+1,len(coll_tidx)):
                     if np.abs(tp[coll_tidx[i1]]-tp[coll_tidx[i2]])<10:
                         forbiddenPairs[ivis].append((coll_tidx[i1],coll_tidx[i2]))
                         found = True
                 if not found:  # not a collision between two active Cobras
                     forbiddenPairs[ivis].append((coll_tidx[i1],))
-    
+
         print("trajectory collisions found:", ncoll)
         done = ncoll == 0
 
@@ -251,8 +251,8 @@ def add_guidestars(args):
     import matplotlib.path as mppath
     from astropy.time import Time
 
-    input_design = pfs.datamodel.PfsDesign.read(args.run_id, args.design_dir)
-    raTel_deg, decTel_deg, pa_deg = input_design.raBoresight, input_design.decBoresight, input_design.posAng
+    # Get ra, dec and position angle from input arguments
+    raTel_deg, decTel_deg, pa_deg = args.ra, args.dec, args.pa
 
     # this should come from the pfsDesign as well, but is not yet in there
     # (DAMD-101)
@@ -376,15 +376,24 @@ def add_guidestars(args):
                                           -42.,  # telescope elevation, don't know how to obtain,
                                           0  # numerical ID assigned to the GAIA catalogue
                                           )
-    output_design.guideStars = guidestars
-    output_design.write(dirName=args.design_dir)
+    return guidestars
 
 
 def main():
     args = get_arguments()
     gen_target_list(args)
-    gen_assignment(args)
-    add_guidestars(args)
+    vis, tp, tel, tgt, classdict = gen_assignment(args)
+    guidestars = add_guidestars(args) # FIXME: rename function to create_guidestars?
+
+    import ets_fiber_assigner.io_helpers
+    ets_fiber_assigner.io_helpers.writePfsDesign(
+        pfsDesignDirectory=args.design_dir,
+        vis=vis,
+        tp=tp,
+        tel=tel,
+        tgt=tgt,
+        classdict=classdict,
+        guidestars=guidestars)
 
 
 if __name__ == '__main__':

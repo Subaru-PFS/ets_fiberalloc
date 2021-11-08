@@ -1,5 +1,7 @@
 import numpy as np
 from collections import defaultdict
+from pfs.datamodel.utils import calculate_pfsDesignId
+
 
 def readPfsDesign(pfsDesignId, pfsDesignDirectory="."):
     import pfs.datamodel
@@ -12,7 +14,7 @@ def inputParamsFromPfsDesign(pfsDesignId, pfsDesignDirectory):
     return Telescope(design.raBoresight, design.decBoresight, design.posAng,
                      300.)  # placeholder until we know where to get the observation time
 
-def writePfsDesign(pfsDesignId, pfsDesignDirectory, vis, tp, tel, tgt, classdict):
+def writePfsDesign(pfsDesignDirectory, vis, tp, tel, tgt, classdict):
     import pfs.datamodel
 
     tdict = defaultdict(int)
@@ -32,6 +34,10 @@ def writePfsDesign(pfsDesignId, pfsDesignDirectory, vis, tp, tel, tgt, classdict
         objId.append(tgt[tidx].ID)
         pfiNominal.append([ tp[tidx].real, tp[tidx].imag ])
         targetType.append(classdict[tgt[tidx].targetclass ] )
+
+    # Compute designId from the fiberId, ra and dec for each
+    # target. Using datamodel utility function
+    pfsDesignId = calculate_pfsDesignId(fiberId, ra, dec)
 
     d = dict(pfsDesignId=pfsDesignId,
         raBoresight=tel._ra,
