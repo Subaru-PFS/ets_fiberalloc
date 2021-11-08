@@ -77,8 +77,6 @@ def get_arguments():
     parser.add_argument("--dec", type=float, default=0., help="Telescope center Dec [degrees]")
     parser.add_argument("--pa", type=float, default=0., help="Telescope position angle [degrees]")
     parser.add_argument("--observation_time", type=str, default="2020-01-01 15:00:00", help="planned time of observation")
-    parser.add_argument("--run_id", type=int, default=42, help="numerical identifier for this run")
-
     parser.add_argument("--lim_target_mag", type=float, default="19.", help="magnitude of the faintest targets")
 
     parser.add_argument("--design_dir", type=str, default=".", help="directory for storing PFS designs")
@@ -97,6 +95,7 @@ def get_arguments():
 
 
 def gen_target_list(args):
+    import tempfile
     from astropy.table import Table
     from ets_shuffle import query_utils
     fp_rad_deg = 260. * 10.2/3600
@@ -115,15 +114,18 @@ def gen_target_list(args):
     tbl["Dec."] = res[deccol]
     tbl["Exposure Time"] = np.full(res[deccol].shape, 900., dtype=np.float64)
     tbl["Priority"] = np.full(res[deccol].shape, 1, dtype=np.int64)
-    tbl.write(str(args.run_id)+"_targets.txt", format="ascii.ecsv", overwrite=True)
+    with tempfile.NamedTemporaryFile(dir='/tmp', delete=False) as tmpfile:
+        outfile = tmpfile.name
+    tbl.write(outfile, format="ascii.ecsv", overwrite=True)
+    return outfile
 
 
-def gen_assignment(args):
+def gen_assignment(args, listname):
     import ets_fiber_assigner.netflow as nf
     from ics.cobraOps.cobraConstants import NULL_TARGET_POSITION, NULL_TARGET_ID
     from ics.cobraOps.CollisionSimulator2 import CollisionSimulator2
     from ics.cobraOps.TargetGroup import TargetGroup
-    tgt = nf.readScientificFromFile(str(args.run_id)+"_targets.txt", "sci")
+    tgt = nf.readScientificFromFile(listname, "sci")
     cobraCoach, bench = getBench(args)
     telescopes= [nf.Telescope(args.ra, args.dec, args.pa, args.observation_time)]
 
@@ -229,17 +231,15 @@ def gen_assignment(args):
 
     # assignment done; write pfsDesign.
     import ets_fiber_assigner.io_helpers
-    ets_fiber_assigner.io_helpers.writePfsDesign(
-        pfsDesignId=args.run_id,
-            pfsDesignDirectory=args.design_dir,
-            vis=res[0],
-            tp=tpos[0],
-            tel=telescopes[0],
-            tgt=tgt,
-            classdict=tclassdict)
+    return ets_fiber_assigner.io_helpers.generatePfsDesign(
+        vis=res[0],
+        tp=tpos[0],
+        tel=telescopes[0],
+        tgt=tgt,
+        classdict=tclassdict)
 
 
-def add_guidestars(args):
+def create_guidestars(args):
     import pfs.datamodel
     from ets_shuffle import query_utils
     from ets_shuffle.convenience import (flag_close_pairs,
@@ -347,8 +347,7 @@ def add_guidestars(args):
                 targets[key] = np.concatenate((targets[key], val))
 
 
-    # Write the results to a new pfsDesign file. Data fields are according to
-    # DAMD-101.
+    # Return guide star data in a type according to DAMD-101.
     # required data:
     # ra/dec of guide star candidates: in racol, deccol
     # PM information: in pmra, pmdec
@@ -356,8 +355,7 @@ def add_guidestars(args):
     # flux: currently N/A
     # AgId: trivial to obtain from data structure
     # AgX, AgY (pixel coordinates): only computable with access to the full
-    #   AG camera geometry
-    output_design = input_design
+    # AG camera geometry
 
     ntgt = len(targets[coldict["id"]])
     guidestars = pfs.datamodel.guideStars.GuideStars(targets[coldict["id"]],
@@ -380,20 +378,15 @@ def add_guidestars(args):
 
 
 def main():
+    import pfs.datamodel
     args = get_arguments()
-    gen_target_list(args)
-    vis, tp, tel, tgt, classdict = gen_assignment(args)
-    guidestars = add_guidestars(args) # FIXME: rename function to create_guidestars?
+    listname = gen_target_list(args)
+    design = gen_assignment(args, listname)
+    guidestars = create_guidestars(args)
+    design.guideStars = guidestars
 
-    import ets_fiber_assigner.io_helpers
-    ets_fiber_assigner.io_helpers.writePfsDesign(
-        pfsDesignDirectory=args.design_dir,
-        vis=vis,
-        tp=tp,
-        tel=tel,
-        tgt=tgt,
-        classdict=classdict,
-        guidestars=guidestars)
+    filename = pfs.datamodel.PfsDesign.fileNameFormat % (design.pfsDesignId)
+    design.write(dirName=args.design_dir, fileName=filename)
 
 
 if __name__ == '__main__':

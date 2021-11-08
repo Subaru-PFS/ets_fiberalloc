@@ -188,7 +188,7 @@ class PulpProblem(LPProblem):
         for i in self._constr:
             self._prob += i
         self._prob.solve(pulp.COIN_CMD(msg=1, keepFiles=0, maxSeconds=100,
-                                       threads=1, dual=10.))
+                                       threads=1))
 
     def update(self):
         pass

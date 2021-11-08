@@ -7,6 +7,7 @@ def readPfsDesign(pfsDesignId, pfsDesignDirectory="."):
     import pfs.datamodel
     return pfs.datamodelPfsDesign.read(pfsDesignId, pfsDesignDirectory)
 
+
 def inputParamsFromPfsDesign(pfsDesignId, pfsDesignDirectory):
     import pfs.datamodel
     from .netflow import Telescope
@@ -14,7 +15,8 @@ def inputParamsFromPfsDesign(pfsDesignId, pfsDesignDirectory):
     return Telescope(design.raBoresight, design.decBoresight, design.posAng,
                      300.)  # placeholder until we know where to get the observation time
 
-def writePfsDesign(pfsDesignDirectory, vis, tp, tel, tgt, classdict):
+
+def generatePfsDesign(vis, tp, tel, tgt, classdict):
     import pfs.datamodel
 
     tdict = defaultdict(int)
@@ -37,7 +39,8 @@ def writePfsDesign(pfsDesignDirectory, vis, tp, tel, tgt, classdict):
 
     # Compute designId from the fiberId, ra and dec for each
     # target. Using datamodel utility function
-    pfsDesignId = calculate_pfsDesignId(fiberId, ra, dec)
+    pfsDesignId = pfs.datamodel.utils.calculate_pfsDesignId(
+        np.asarray(fiberId), np.asarray(ra), np.asarray(dec))
 
     d = dict(pfsDesignId=pfsDesignId,
         raBoresight=tel._ra,
@@ -63,6 +66,12 @@ def writePfsDesign(pfsDesignDirectory, vis, tp, tel, tgt, classdict):
         pfiNominal=pfiNominal,
         guideStars=None)
 
-    pfsDesign = pfs.datamodel.PfsDesign(**d)
-    filename = pfs.datamodel.PfsDesign.fileNameFormat % (pfsDesignId)
+    return pfs.datamodel.PfsDesign(**d)
+
+
+def writePfsDesign(pfsDesignDirectory, vis, tp, tel, tgt, classdict):
+    import pfs.datamodel
+
+    pfsDesign = generatePfsDesign(vis, tp, tel, tgt, classdict)
+    filename = pfs.datamodel.PfsDesign.fileNameFormat % (pfsDesign.pfsDesignId)
     pfsDesign.write(dirName=pfsDesignDirectory, fileName=filename)
