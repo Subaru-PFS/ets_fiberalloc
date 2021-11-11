@@ -85,7 +85,7 @@ def get_arguments():
     parser.add_argument("--guidestar_neighbor_mag_min", type=float, default=21., help="minimum magnitude for objects in the vicinity of guide star candidates")
     parser.add_argument("--guidestar_minsep_deg", type=float, default=1./3600, help="radius of guide star candidate vicinity")
 
-    parser.add_argument("--use_gurobi", type=bool, default=False, help="use Gurobi solver instead of PuLP")
+    parser.add_argument("--use_gurobi", type=bool, action='store_true', help="use Gurobi solver instead of PuLP")
     parser.add_argument("--cobra_coach_dir", type=str, default=".", help="path for temporary cobraCoach files")
 
     parser.add_argument("--cobra_coach_module_version", type=str, default="final_20210920_mm", help="version of the bench decription file")
