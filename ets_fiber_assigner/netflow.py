@@ -215,7 +215,9 @@ def makeName(*stuff):
 def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                  cobraMoveCost=None, collision_distance=0.,
                  elbow_collisions=True, gurobi=True, gurobiOptions=None,
-                 alreadyObserved=None, forbiddenPairs=None):
+                 alreadyObserved=None, forbiddenPairs=None,
+                 cobraLocationGroup=None, min_sky_targets_per_location=None,
+                 CobraSlitGroup=None):
     """Build the ILP problem for a given observation task
 
     Parameters
@@ -254,6 +256,16 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
     forbiddenPairs : None or list(list(tuple of 2 ints))
         Pairs of targets that cannot be both observed during the same visit,
         because this would lead to trajectory collisions
+    cobraLocationGroup : integer, array-like
+        if provided, this must be indexable with the Cobra indices from "bench"
+        and return the "location group index" of the respective Cobra.
+        As an example, the focal plane could be divided into 7 hexagonal
+        sub-areas with indices 0 to 6.
+    min_sky_targets_per_location: integer
+        how many sky targets have to be observed in every location group
+    cobraSlitGroup : integer, array-like
+        if provided, this must be indexable with the Cobra indices from "bench"
+        and return the "slit group index" of the respective Cobra.
     """
     Cv_i = defaultdict(list)  # Cobra visit inflows
     Tv_o = defaultdict(list)  # Target visit outflows
@@ -262,6 +274,10 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
     T_i = defaultdict(list)  # Target inflows (only science targets)
     CTCv_o = defaultdict(list)  # Calibration Target class visit outflows
     STC_o = defaultdict(list)  # Science Target outflows
+
+    if cobraLocationGroup is not None:
+        maxLocGroup = max(cobraLocationGroup)
+        locationVars = [[] for _ in range(maxLocGroup+1)]
 
     if gurobi:
         prob = GurobiProblem(extraOptions=gurobiOptions)
@@ -337,6 +353,10 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                 f = prob.addVar(makeName("Tv_Cv", tidx, cidx, ivis), 0, 1)
                 Cv_i[(cidx, ivis)].append(f)
                 Tv_o[(tidx, ivis)].append((f, cidx))
+                if cobraLocationGroup is not None \
+                        and isinstance(tgt, CalibTarget) \
+                        and tgt.targetClass == "sky":
+                    locationvars[cobraLocationGroup[cidx]].append(f)
                 tcost = vis_cost[ivis]
                 if cobraMoveCost is not None:
                     dist = np.abs(bench.cobras.centers[cidx]-tpos[ivis][tidx])
@@ -438,6 +458,12 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
             n_obs = classdict[key]["nobs_max"]
         prob.add_constraint(makeName("ST", key[0], key[1]),
             prob.sum([v for v in val]) == n_obs)
+
+    # Make sure that there are enough sky targets in every Cobra location group
+    if cobraLocationGroup is not None:
+        for i in range(maxLocGroup+1):
+            prob.add_constraint(makeName("LocGrp",i),
+                prob.sum([v for v in locationVars[i]]) >= min_sky_targets_per_location)
 
     return prob
 

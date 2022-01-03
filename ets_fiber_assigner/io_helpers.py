@@ -34,8 +34,10 @@ def generatePfsDesign(vis, tp, tel, tgt, classdict):
         dec.append(tgt[tidx].dec)
         fiberId.append(cidx)
         objId.append(tgt[tidx].ID)
-        pfiNominal.append([ tp[tidx].real, tp[tidx].imag ])
-        targetType.append(classdict[tgt[tidx].targetclass ] )
+        pfiNominal.append([ tp[tidx].real, tp[tidx].imag])
+        targetType.append(classdict[tgt[tidx].targetclass])
+
+    pfiNominal = np.array(pfiNominal).reshape((-1, 2))
 
     # Compute designId from the fiberId, ra and dec for each
     # target. Using datamodel utility function
