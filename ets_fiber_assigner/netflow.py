@@ -275,10 +275,6 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
     CTCv_o = defaultdict(list)  # Calibration Target class visit outflows
     STC_o = defaultdict(list)  # Science Target outflows
 
-    if cobraLocationGroup is not None:
-        maxLocGroup = max(cobraLocationGroup)
-        locationVars = [[] for _ in range(maxLocGroup+1)]
-
     if gurobi:
         prob = GurobiProblem(extraOptions=gurobiOptions)
     else:
@@ -299,6 +295,11 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
             ndone.append(0)
 
     nvisits = len(tpos)
+
+    if cobraLocationGroup is not None:
+        maxLocGroup = max(cobraLocationGroup)
+        locationVars = [[[] for _ in range(maxLocGroup+1)] for _ in range(nvisits)]
+        print(locationVars)
 
     if vis_cost is None:
         vis_cost = [0.] * nvisits
@@ -356,7 +357,7 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                 if cobraLocationGroup is not None \
                         and isinstance(tgt, CalibTarget) \
                         and tgt.targetClass == "sky":
-                    locationvars[cobraLocationGroup[cidx]].append(f)
+                    locationvars[cobraLocationGroup[cidx][ivis]].append(f)
                 tcost = vis_cost[ivis]
                 if cobraMoveCost is not None:
                     dist = np.abs(bench.cobras.centers[cidx]-tpos[ivis][tidx])
@@ -462,8 +463,9 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
     # Make sure that there are enough sky targets in every Cobra location group
     if cobraLocationGroup is not None:
         for i in range(maxLocGroup+1):
-            prob.add_constraint(makeName("LocGrp",i),
-                prob.sum([v for v in locationVars[i]]) >= min_sky_targets_per_location)
+            for ivis in range(nvisits):
+                prob.add_constraint(makeName("LocGrp",i,ivis),
+                    prob.sum([v for v in locationVars[i][ivis]]) >= min_sky_targets_per_location)
 
     return prob
 
