@@ -299,7 +299,12 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
     if cobraLocationGroup is not None:
         maxLocGroup = max(cobraLocationGroup)
         locationVars = [[[] for _ in range(maxLocGroup+1)] for _ in range(nvisits)]
-        print(locationVars)
+        # add overflow arcs. FIXME: cost still needs to be determined
+        for i in range(nvisits):
+            for j in range(maxLocGroup+1):
+                f = prob.addVar(makeName("locgroup_sink", i, j), 0, None)
+                prob.cost += f*1e6  # FIXME
+                locationVars[i][j].append(f)
 
     if vis_cost is None:
         vis_cost = [0.] * nvisits
@@ -462,10 +467,10 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
 
     # Make sure that there are enough sky targets in every Cobra location group
     if cobraLocationGroup is not None:
-        for i in range(maxLocGroup+1):
-            for ivis in range(nvisits):
-                prob.add_constraint(makeName("LocGrp",i,ivis),
-                    prob.sum([v for v in locationVars[i][ivis]]) >= min_sky_targets_per_location)
+        for ivis in range(nvisits):
+            for i in range(maxLocGroup+1):
+                prob.add_constraint(makeName("LocGrp",ivis,i),
+                    prob.sum([v for v in locationVars[ivis][i]]) >= min_sky_targets_per_location)
 
     return prob
 

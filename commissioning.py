@@ -180,15 +180,12 @@ def gen_assignment(args, listname):
                     _, _, tidx, cidx, ivis = k1.split("_")
                     res[int(ivis)][int(tidx)] = int(cidx)
 
-# NOTE: the following block would normally be used to "fix" the trajectory
-# collisions detected by the collision simulator.
-# However, this does not work currently, since the current version of
+# NOTE: the code below does not yet work perfectly, since the current version of
 # cobraCharmer does not actively move unassigned Cobras out of the way of
-# assigned ones, which can result in endpoint collisions which the fiber
-# assigner itself cannot avoid (since it does not know anything about the
-# positioning of unassigned Cobras).
-# So we skip this for now, hoping that it will become possible again with future
-# releases of cobraCharmer.
+# assigned ones, which can result in unnecessary endpoint collisions. The fiber
+# assigner can only work around those by adding the affected Cobra-target pairs
+# to the "forbidden pair list" and retry, which can be a very slow (and
+# suboptimal) process.
 
         print("Checking for trajectory collisions")
         ncoll = 0
