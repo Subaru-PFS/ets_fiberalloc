@@ -216,8 +216,8 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                  cobraMoveCost=None, collision_distance=0.,
                  elbow_collisions=True, gurobi=True, gurobiOptions=None,
                  alreadyObserved=None, forbiddenPairs=None,
-                 cobraLocationGroup=None, min_sky_targets_per_location=None,
-                 CobraSlitGroup=None):
+                 cobraLocationGroup=None, minSkyTargetsPerLocation=None,
+                 locationGroupPenalty=None):
     """Build the ILP problem for a given observation task
 
     Parameters
@@ -261,11 +261,11 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
         and return the "location group index" of the respective Cobra.
         As an example, the focal plane could be divided into 7 hexagonal
         sub-areas with indices 0 to 6.
-    min_sky_targets_per_location: integer
+    minSkyTargetsPerLocation : integer
         how many sky targets have to be observed in every location group
-    cobraSlitGroup : integer, array-like
-        if provided, this must be indexable with the Cobra indices from "bench"
-        and return the "slit group index" of the respective Cobra.
+    locationGroupPenalty : float
+        how much to increase the cost function for every "missing" sky target
+        in a focal plane region
     """
     Cv_i = defaultdict(list)  # Cobra visit inflows
     Tv_o = defaultdict(list)  # Target visit outflows
@@ -303,7 +303,7 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
         for i in range(nvisits):
             for j in range(maxLocGroup+1):
                 f = prob.addVar(makeName("locgroup_sink", i, j), 0, None)
-                prob.cost += f*1e6  # FIXME
+                prob.cost += f*locationGroupPenalty
                 locationVars[i][j].append(f)
 
     if vis_cost is None:
@@ -362,7 +362,7 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                 if cobraLocationGroup is not None \
                         and isinstance(tgt, CalibTarget) \
                         and tgt.targetClass == "sky":
-                    locationvars[cobraLocationGroup[cidx][ivis]].append(f)
+                    locationvars[ivis][cobraLocationGroup[cidx]].append(f)
                 tcost = vis_cost[ivis]
                 if cobraMoveCost is not None:
                     dist = np.abs(bench.cobras.centers[cidx]-tpos[ivis][tidx])
@@ -470,7 +470,7 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
         for ivis in range(nvisits):
             for i in range(maxLocGroup+1):
                 prob.add_constraint(makeName("LocGrp",ivis,i),
-                    prob.sum([v for v in locationVars[ivis][i]]) >= min_sky_targets_per_location)
+                    prob.sum([v for v in locationVars[ivis][i]]) >= minSkyTargetsPerLocation)
 
     return prob
 
