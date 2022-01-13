@@ -361,8 +361,8 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                 Tv_o[(tidx, ivis)].append((f, cidx))
                 if cobraLocationGroup is not None \
                         and isinstance(tgt, CalibTarget) \
-                        and tgt.targetClass == "sky":
-                    locationvars[ivis][cobraLocationGroup[cidx]].append(f)
+                        and tgt.targetclass == "sky":
+                    locationVars[ivis][cobraLocationGroup[cidx]].append(f)
                 tcost = vis_cost[ivis]
                 if cobraMoveCost is not None:
                     dist = np.abs(bench.cobras.centers[cidx]-tpos[ivis][tidx])
