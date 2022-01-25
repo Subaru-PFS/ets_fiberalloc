@@ -217,7 +217,9 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                  elbow_collisions=True, gurobi=True, gurobiOptions=None,
                  alreadyObserved=None, forbiddenPairs=None,
                  cobraLocationGroup=None, minSkyTargetsPerLocation=None,
-                 locationGroupPenalty=None):
+                 locationGroupPenalty=None,
+                 cobraInstrumentRegion=None, minSkyTargetsPerInstrumentRegion=None,
+                 instrumentRegionPenalty=None):
     """Build the ILP problem for a given observation task
 
     Parameters
@@ -266,6 +268,16 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
     locationGroupPenalty : float
         how much to increase the cost function for every "missing" sky target
         in a focal plane region
+    cobraInstrumentRegion : integer, array-like
+        if provided, this must be indexable with the Cobra indices from "bench"
+        and return the "instrument region index" of the respective Cobra.
+        Instrument regions will typically be used to describe continuous regions
+        along a spectrograph slit.
+    minSkyTargetsPerInstrumentRegion : integer
+        how many sky targets have to be observed in every instrument region
+    instrumentRegionPenalty : float
+        how much to increase the cost function for every "missing" sky target
+        in an instrument region
     """
     Cv_i = defaultdict(list)  # Cobra visit inflows
     Tv_o = defaultdict(list)  # Target visit outflows
@@ -299,12 +311,22 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
     if cobraLocationGroup is not None:
         maxLocGroup = max(cobraLocationGroup)
         locationVars = [[[] for _ in range(maxLocGroup+1)] for _ in range(nvisits)]
-        # add overflow arcs. FIXME: cost still needs to be determined
+        # add overflow arcs.
         for i in range(nvisits):
             for j in range(maxLocGroup+1):
                 f = prob.addVar(makeName("locgroup_sink", i, j), 0, None)
                 prob.cost += f*locationGroupPenalty
                 locationVars[i][j].append(f)
+
+    if cobraInstrumentRegion is not None:
+        maxInstRegion = max(cobraInstrumentRegion)
+        regionVars = [[[] for _ in range(maxInstRegion+1)] for _ in range(nvisits)]
+        # add overflow arcs.
+        for i in range(nvisits):
+            for j in range(maxInstRegion+1):
+                f = prob.addVar(makeName("instregion_sink", i, j), 0, None)
+                prob.cost += f*instrumentRegionPenalty
+                regionVars[i][j].append(f)
 
     if vis_cost is None:
         vis_cost = [0.] * nvisits
@@ -363,6 +385,10 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                         and isinstance(tgt, CalibTarget) \
                         and tgt.targetclass == "sky":
                     locationVars[ivis][cobraLocationGroup[cidx]].append(f)
+                if cobraInstrumentRegion is not None \
+                        and isinstance(tgt, CalibTarget) \
+                        and tgt.targetclass == "sky":
+                    regionVars[ivis][cobraInstrumentRegion[cidx]].append(f)
                 tcost = vis_cost[ivis]
                 if cobraMoveCost is not None:
                     dist = np.abs(bench.cobras.centers[cidx]-tpos[ivis][tidx])
@@ -471,6 +497,13 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
             for i in range(maxLocGroup+1):
                 prob.add_constraint(makeName("LocGrp",ivis,i),
                     prob.sum([v for v in locationVars[ivis][i]]) >= minSkyTargetsPerLocation)
+
+    # Make sure that there are enough sky targets in every Cobra instrument region
+    if cobraInstrumentRegion is not None:
+        for ivis in range(nvisits):
+            for i in range(maxInstRegion+1):
+                prob.add_constraint(makeName("InstReg",ivis,i),
+                    prob.sum([v for v in regionVars[ivis][i]]) >= minSkyTargetsPerInstrumentRegion)
 
     return prob
 
