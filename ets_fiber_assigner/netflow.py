@@ -1,7 +1,6 @@
-from __future__ import print_function
 import numpy as np
 from collections import defaultdict
-
+from astropy.table import Table
 
 def _get_colliding_pairs(bench, tpos, vis, dist):
     tpos = np.array(tpos)
@@ -123,6 +122,10 @@ class GurobiProblem(LPProblem):
         self._constraintdict[name] = constraint
         self._prob.addConstr(constraint)
 
+    def add_lazy_constraint(self, name, constraint):
+        constraint.Lazy = 1
+        self.add_constraint(name, constraint)
+
     @staticmethod
     def value(var):
         return var.X
@@ -171,6 +174,9 @@ class PulpProblem(LPProblem):
         self._constraintdict[name] = constraint
         self._constr.append(constraint)
 
+    def add_lazy_constraint(self, name, constraint):
+        self.add_constraint(name, constraint)
+
     @staticmethod
     def value(var):
         import pulp
@@ -182,7 +188,7 @@ class PulpProblem(LPProblem):
         for i in self._constr:
             self._prob += i
         self._prob.solve(pulp.COIN_CMD(msg=1, keepFiles=0, maxSeconds=100,
-                                       threads=1, dual=10.))
+                                       threads=1))
 
     def update(self):
         pass
@@ -209,7 +215,11 @@ def makeName(*stuff):
 def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                  cobraMoveCost=None, collision_distance=0.,
                  elbow_collisions=True, gurobi=True, gurobiOptions=None,
-                 alreadyObserved=None):
+                 alreadyObserved=None, forbiddenPairs=None,
+                 cobraLocationGroup=None, minSkyTargetsPerLocation=None,
+                 locationGroupPenalty=None,
+                 cobraInstrumentRegion=None, minSkyTargetsPerInstrumentRegion=None,
+                 instrumentRegionPenalty=None):
     """Build the ILP problem for a given observation task
 
     Parameters
@@ -245,6 +255,29 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
     alreadyObserved : None or dict{string: int}
         if not None, this is a dictionary containing IDs of science targets
         and the number of visits they have already been observed
+    forbiddenPairs : None or list(list(tuple of 2 ints))
+        Pairs of targets that cannot be both observed during the same visit,
+        because this would lead to trajectory collisions
+    cobraLocationGroup : integer, array-like
+        if provided, this must be indexable with the Cobra indices from "bench"
+        and return the "location group index" of the respective Cobra.
+        As an example, the focal plane could be divided into 7 hexagonal
+        sub-areas with indices 0 to 6.
+    minSkyTargetsPerLocation : integer
+        how many sky targets have to be observed in every location group
+    locationGroupPenalty : float
+        how much to increase the cost function for every "missing" sky target
+        in a focal plane region
+    cobraInstrumentRegion : integer, array-like
+        if provided, this must be indexable with the Cobra indices from "bench"
+        and return the "instrument region index" of the respective Cobra.
+        Instrument regions will typically be used to describe continuous regions
+        along a spectrograph slit.
+    minSkyTargetsPerInstrumentRegion : integer
+        how many sky targets have to be observed in every instrument region
+    instrumentRegionPenalty : float
+        how much to increase the cost function for every "missing" sky target
+        in an instrument region
     """
     Cv_i = defaultdict(list)  # Cobra visit inflows
     Tv_o = defaultdict(list)  # Target visit outflows
@@ -274,6 +307,26 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
             ndone.append(0)
 
     nvisits = len(tpos)
+
+    if cobraLocationGroup is not None:
+        maxLocGroup = max(cobraLocationGroup)
+        locationVars = [[[] for _ in range(maxLocGroup+1)] for _ in range(nvisits)]
+        # add overflow arcs.
+        for i in range(nvisits):
+            for j in range(maxLocGroup+1):
+                f = prob.addVar(makeName("locgroup_sink", i, j), 0, None)
+                prob.cost += f*locationGroupPenalty
+                locationVars[i][j].append(f)
+
+    if cobraInstrumentRegion is not None:
+        maxInstRegion = max(cobraInstrumentRegion)
+        regionVars = [[[] for _ in range(maxInstRegion+1)] for _ in range(nvisits)]
+        # add overflow arcs.
+        for i in range(nvisits):
+            for j in range(maxInstRegion+1):
+                f = prob.addVar(makeName("instregion_sink", i, j), 0, None)
+                prob.cost += f*instrumentRegionPenalty
+                regionVars[i][j].append(f)
 
     if vis_cost is None:
         vis_cost = [0.] * nvisits
@@ -328,6 +381,14 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                 f = prob.addVar(makeName("Tv_Cv", tidx, cidx, ivis), 0, 1)
                 Cv_i[(cidx, ivis)].append(f)
                 Tv_o[(tidx, ivis)].append((f, cidx))
+                if cobraLocationGroup is not None \
+                        and isinstance(tgt, CalibTarget) \
+                        and tgt.targetclass == "sky":
+                    locationVars[ivis][cobraLocationGroup[cidx]].append(f)
+                if cobraInstrumentRegion is not None \
+                        and isinstance(tgt, CalibTarget) \
+                        and tgt.targetclass == "sky":
+                    regionVars[ivis][cobraInstrumentRegion[cidx]].append(f)
                 tcost = vis_cost[ivis]
                 if cobraMoveCost is not None:
                     dist = np.abs(bench.cobras.centers[cidx]-tpos[ivis][tidx])
@@ -367,8 +428,34 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                             constr.append([makeName("Coll_", cidx, cidx2, ivis),
                                            prob.sum(flows) <= 1])
 
+        # add constraints for forbidden pairs of targets
+        if forbiddenPairs is not None:
+            print("adding forbidden pair constraints")
+            keys = Tv_o.keys()
+            keys = set(key[0] for key in keys if key[1] == ivis)
+            for p in forbiddenPairs[ivis]:
+                if len(p) == 2:
+                    if p[0] in keys and p[1] in keys:
+                        flows = [v[0] for v in
+                                 Tv_o[(p[0], ivis)] + Tv_o[(p[1], ivis)]]
+                        tname0 = targets[p[0]].ID
+                        tname1 = targets[p[1]].ID
+                        constr.append([makeName("forbiddenPair_", tname0, tname1, ivis),
+                                       prob.sum(flows) <= 1])
+                elif len(p) == 1:
+                    if p[0] in keys:
+                        flows = [v[0] for v in Tv_o[(p[0], ivis)]]
+                        tname0 = targets[p[0]].ID
+                        constr.append([makeName("forbiddenPair_", tname0, ivis),
+                                       prob.sum(flows) == 0])
+                else:
+                    raise RuntimeError("oops")
+                   
+
     for c in constr:
-        prob.add_constraint(c[0], c[1])
+        # We add the collision constraints as lazy in the hope that this will
+        # speed up the solution
+        prob.add_lazy_constraint(c[0], c[1])
 
     # every Cobra can observe at most one target per visit
     for key, inflow in Cv_i.items():
@@ -403,6 +490,20 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
             n_obs = classdict[key]["nobs_max"]
         prob.add_constraint(makeName("ST", key[0], key[1]),
             prob.sum([v for v in val]) == n_obs)
+
+    # Make sure that there are enough sky targets in every Cobra location group
+    if cobraLocationGroup is not None:
+        for ivis in range(nvisits):
+            for i in range(maxLocGroup+1):
+                prob.add_constraint(makeName("LocGrp",ivis,i),
+                    prob.sum([v for v in locationVars[ivis][i]]) >= minSkyTargetsPerLocation)
+
+    # Make sure that there are enough sky targets in every Cobra instrument region
+    if cobraInstrumentRegion is not None:
+        for ivis in range(nvisits):
+            for i in range(maxInstRegion+1):
+                prob.add_constraint(makeName("InstReg",ivis,i),
+                    prob.sum([v for v in regionVars[ivis][i]]) >= minSkyTargetsPerInstrumentRegion)
 
     return prob
 
@@ -527,6 +628,13 @@ def telescopeRaDecFromFile(file):
     =====
     For testing/demonstration purposes only. DO NOT USE FOR SERIOUS WORK.
     """
+    try:
+        # first try reading as ecsv format
+        t = Table.read(file, format="ascii.ecsv")
+        return float(np.average(t["R.A."])), float(np.average(t['Dec.']))
+    except:
+        pass
+
     with open(file) as f:
         ras = []
         decs = []
@@ -554,6 +662,17 @@ def readScientificFromFile(file, prefix):
     =======
     list of ScienceTarget : the created ScienceTarget objects
     """
+    try:
+        # first try reading as ecsv format
+        t = Table.read(file, format="ascii.ecsv")
+        res = []
+        for r in t:
+            res.append(ScienceTarget(r["ID"], r["R.A."], r["Dec."], r["Exposure Time"], r["Priority"], prefix))
+        return res
+    except:
+        pass
+
+    # try legacy format
     with open(file) as f:
         res = []
         ll = f.readlines()
@@ -561,7 +680,7 @@ def readScientificFromFile(file, prefix):
             if not l.startswith("#"):
                 tt = l.split()
                 id_, ra, dec, tm, pri = (
-                    str(tt[0]), float(tt[1]), float(tt[2]),
+                    str(tt[0])[1:], float(tt[1]), float(tt[2]),
                     float(tt[3]), int(tt[4]))
                 res.append(ScienceTarget(id_, ra, dec, tm, pri, prefix))
     return res
@@ -581,12 +700,23 @@ def readCalibrationFromFile(file, targetclass):
     =======
     list of CalibrationTarget : the created CalibrationTarget objects
     """
+    try:
+        # first try reading as ecsv format
+        t = Table.read(file, format="ascii.ecsv")
+        res = []
+        for r in t:
+            res.append(CalibTarget(r["ID"], r["R.A."], r["Dec."], targetclass))
+        return res
+    except:
+        pass
+
+    # try legacy format
     with open(file) as f:
         res = []
         ll = f.readlines()
         for l in ll[1:]:
             if not l.startswith("#"):
                 tt = l.split()
-                id_, ra, dec = (str(tt[0]), float(tt[1]), float(tt[2]))
+                id_, ra, dec = (str(tt[0])[1:], float(tt[1]), float(tt[2]))
                 res.append(CalibTarget(id_, ra, dec, targetclass))
     return res

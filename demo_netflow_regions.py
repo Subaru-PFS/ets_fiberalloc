@@ -13,18 +13,9 @@ np.random.seed(20)
 
 # define locations of the input files
 catalog_path = "data/"
-fscience_targets = catalog_path+"pfs_preliminary_target_cosmology.dat"
-# So far, we only have test data for targets.
-# Once we have files for calibration stars and sky locations, we can add them
-# here.
-fcal_stars = catalog_path+"pfs_preliminary_target_cosmology_fcstars.dat"
 fsky_pos = catalog_path+"pfs_preliminary_target_cosmology_sky.dat"
 
-# read all targets into a single list, giving them their proper types
-tgt = nf.readScientificFromFile(fscience_targets, "sci")
-# add calibration targets
-tgt += nf.readCalibrationFromFile(fcal_stars, "cal")
-tgt += nf.readCalibrationFromFile(fsky_pos, "sky")
+tgt = nf.readCalibrationFromFile(fsky_pos, "sky")
 
 # get a complete, idealized focal plane configuration
 bench = Bench(layout="full")
@@ -33,7 +24,7 @@ bench = Bench(layout="full")
 #     "../ics_cobraOps/python/ics/demos/updatedMaps6.xml"))
 
 # point the telescope at the center of all science targets
-raTel, decTel = nf.telescopeRaDecFromFile(fscience_targets)
+raTel, decTel = nf.telescopeRaDecFromFile(fsky_pos)
 posang = 0.
 otime = "2016-04-03T08:00:00Z"
 telescopes = []
@@ -52,23 +43,7 @@ tpos = [tele.get_fp_positions(tgt) for tele in telescopes]
 # create the dictionary containing the costs and constraints for all classes
 # of targets
 classdict = {}
-classdict["sci_P1"] = {"nonObservationCost": 100,
-                       "partialObservationCost": 1e9, "calib": False}
-classdict["sci_P2"] = {"nonObservationCost": 90,
-                       "partialObservationCost": 1e9, "calib": False}
-classdict["sci_P3"] = {"nonObservationCost": 80,
-                       "partialObservationCost": 1e9, "calib": False}
-classdict["sci_P4"] = {"nonObservationCost": 70,
-                       "partialObservationCost": 1e9, "calib": False}
-classdict["sci_P5"] = {"nonObservationCost": 60,
-                       "partialObservationCost": 1e9, "calib": False}
-classdict["sci_P6"] = {"nonObservationCost": 50,
-                       "partialObservationCost": 1e9, "calib": False}
-classdict["sci_P7"] = {"nonObservationCost": 40,
-                       "partialObservationCost": 1e9, "calib": False}
 classdict["sky"] = {"numRequired": 240,
-                    "nonObservationCost": 1e6, "calib": True}
-classdict["cal"] = {"numRequired": 40,
                     "nonObservationCost": 1e6, "calib": True}
 
 # optional: slightly increase the cost for later observations,
@@ -99,6 +74,12 @@ forbiddenPairs = []
 for i in range(nvisit):
     forbiddenPairs.append([])
 
+
+# define two location regions arbitrarily
+ncobras = bench.cobras.nCobras
+cobraRegions=np.zeros(ncobras,dtype=np.int32)
+cobraRegions[ncobras//2:] = 1
+
 done = False
 while not done:
     # compute observation strategy
@@ -107,7 +88,10 @@ while not done:
                            collision_distance=2., elbow_collisions=True,
                            gurobi=False, gurobiOptions=gurobiOptions,
                            alreadyObserved=alreadyObserved,
-                           forbiddenPairs=forbiddenPairs)
+                           forbiddenPairs=forbiddenPairs,
+                           cobraLocationGroup=cobraRegions,
+                           minSkyTargetsPerLocation=40,
+                           locationGroupPenalty=1e9)
 
     # print("writing problem to file ", mpsName)
     # prob.dump(mpsName)
