@@ -374,6 +374,8 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
             elif isinstance(tgt, CalibTarget):
                 # Calibration Target class node to target visit node
                 f = prob.addVar(makeName("CTCv_Tv", TC, tgt.ID, ivis), 0, 1)
+                if tgt._penalty != 0:
+                    prob.cost += f*tgt._penalty
                 Tv_i[(tidx, ivis)].append(f)
                 CTCv_o[(TC, ivis)].append(f)
             for (cidx, _) in thing:
@@ -610,6 +612,9 @@ class ScienceTarget(Target):
 
 class CalibTarget(Target):
     """Derived from the Target class."""
+    def __init__(self, ID, ra, dec, targetclass, penalty=0.):
+        super(CalibTarget, self).__init__(ID, ra, dec, targetclass)
+        self._penalty = penalty
 
 
 def telescopeRaDecFromFile(file):
@@ -719,4 +724,25 @@ def readCalibrationFromFile(file, targetclass):
                 tt = l.split()
                 id_, ra, dec = (str(tt[0])[1:], float(tt[1]), float(tt[2]))
                 res.append(CalibTarget(id_, ra, dec, targetclass))
+    return res
+
+
+def readCalibrationWithPenaltyFromFile(file, targetclass):
+    """Read a set of calibration targets from a file
+
+    Parameters
+    ==========
+    file : string
+        the name os the text file containing the target information
+    targetclass : string
+        the name of the target class to which these targets will belong
+
+    Returns
+    =======
+    list of CalibrationTarget : the created CalibrationTarget objects
+    """
+    t = Table.read(file, format="ascii.ecsv")
+    res = []
+    for r in t:
+        res.append(CalibTarget(r["ID"], r["R.A."], r["Dec."], targetclass, r["penalty"]))
     return res
