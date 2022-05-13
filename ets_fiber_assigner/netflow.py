@@ -559,10 +559,13 @@ class Target(object):
     determine its position on the focal plane, once also the telescope attitude
     is known. """
 
-    def __init__(self, ID, ra, dec, targetclass):
+    def __init__(self, ID, ra, dec, targetclass, pmra=0, pmdec=0, parallax=0):
         self._ID = str(ID)
         self._ra = float(ra)
         self._dec = float(dec)
+        self._pmra = float(pmra)
+        self._pmdec = float(pmdec)
+        self._parallax = float(parallax)
         self._targetclass = targetclass
 
     @property
@@ -572,13 +575,28 @@ class Target(object):
 
     @property
     def ra(self):
-        """the rectascension : float"""
+        """the rectascension in degrees : float"""
         return self._ra
 
     @property
     def dec(self):
-        """the declination : float"""
+        """the declination in degrees : float"""
         return self._dec
+
+    @property
+    def pmra(self):
+        """the rectascension component of proper motion in mas/yr : float"""
+        return self._pmra
+
+    @property
+    def pmdec(self):
+        """the declination component of proper motion in mas/yr : float"""
+        return self._pmdec
+
+    @property
+    def parallax(self):
+        """the parallax in mas : float"""
+        return self._parallax
 
     @property
     def targetclass(self):
@@ -593,9 +611,10 @@ class ScienceTarget(Target):
     All different types of ScienceTarget need to be derived from this class."
     """
 
-    def __init__(self, ID, ra, dec, obs_time, pri, prefix):
+    def __init__(self, ID, ra, dec, obs_time, pri, prefix, pmra=0, pmdec=0, parallax=0):
         super(ScienceTarget, self).__init__(ID, ra, dec,
-                                            "{}_P{}".format(prefix, pri))
+                                            "{}_P{}".format(prefix, pri),
+                                            pmra=pmra, pmdec=pmdec, parallax=parallax)
         self._obs_time = float(obs_time)
         self._pri = int(pri)
 
@@ -662,6 +681,10 @@ def readScientificFromFile(file, prefix):
     =======
     list of ScienceTarget : the created ScienceTarget objects
     """
+
+    # FIXME: add a routine that can read proper motion and parallax information
+    #        from the file, as soon as the file format has been defined
+
     try:
         # first try reading as ecsv format
         t = Table.read(file, format="ascii.ecsv")
