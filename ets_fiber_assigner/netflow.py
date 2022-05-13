@@ -450,7 +450,7 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                                        prob.sum(flows) == 0])
                 else:
                     raise RuntimeError("oops")
-                   
+
 
     for c in constr:
         # We add the collision constraints as lazy in the hope that this will
@@ -548,8 +548,8 @@ class Telescope(object):
         for i, t in enumerate(tgt):
             tmp[0, i], tmp[1, i] = t.ra, t.dec
         tmp = ctrans(xyin=tmp,
-            za=0., mode="sky_pfi", inr=0., pa=self._posang,
-            cent=np.array([self._ra, self._dec]), time=self._time)
+            mode="sky_pfi", pa=self._posang,
+            cent=np.array([self._ra, self._dec]).reshape((2,1)), time=self._time)
         return tmp[0, :] + 1j*tmp[1, :]
 
 

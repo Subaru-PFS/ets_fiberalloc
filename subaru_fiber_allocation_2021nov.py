@@ -30,7 +30,6 @@ from astropy.time import Time
 from ets_shuffle import query_utils
 from ets_shuffle.convenience import flag_close_pairs
 from ets_shuffle.convenience import guidecam_geometry
-from ets_shuffle.convenience import update_coords_for_proper_motion
 from ics.cobraOps.Bench import Bench
 from ics.cobraOps.BlackDotsCalibrationProduct import BlackDotsCalibrationProduct
 from ics.cobraOps.cobraConstants import NULL_TARGET_ID
@@ -831,26 +830,15 @@ def create_guidestars_from_gaiadb(args):
     # # FIXME: run similar query, but without the PM requirement, to get a list of
     # # potentially too-bright neighbours
 
-    # adjust for proper motion
-    epoch = Time(args.observation_time).jyear
-    res[racol], res[deccol] = update_coords_for_proper_motion(
-        res[racol],
-        res[deccol],
-        res[coldict["pmra"]],
-        res[coldict["pmdec"]],
-        2015.5,  # Gaia DR2 uses 2015.5
-        epoch,
-    )
-
     # compute PFI coordinates
     tmp = np.array([res[racol], res[deccol]])
     tmp = ctrans(
         xyin=tmp,
-        za=0.0,
         mode="sky_pfi",
-        inr=0.0,
         pa=pa_deg,
-        cent=np.array([raTel_deg, decTel_deg]),
+        cent=np.array([raTel_deg, decTel_deg]).reshape((2,1)),
+        pm=np.stack([res[coldict["pmra"]],res[coldict["pmdec"]]],axis=0),
+        par=res[coldict["parallax"]],
         time=obs_time,
     )
 
@@ -927,6 +915,12 @@ def create_guidestars_from_gaiadb(args):
     guidestars = pfs.datamodel.guideStars.GuideStars(
         targets[coldict["id"]],
         np.full(ntgt, "J{:.1f}".format(epoch)),  # convert float epoch to string
+        # FIXME: the ra/dec values below are _not_ corrected for proper motion
+        #        any more! If corrected values are required, we might need
+        #        a new mode "sky_skycorrected" (or similar)
+        #        for pfs.utils.CoordinateTransform.
+        #        On the other hand, since we store catalog and object ID here,
+        #        most other columns are redundant anyway.
         targets[coldict["ra"]],
         targets[coldict["dec"]],
         targets[coldict["pmra"]],

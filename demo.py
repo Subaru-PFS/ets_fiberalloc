@@ -38,8 +38,8 @@ def radec2pos(ras, decs, raTel=None, decTel=None, posang=0.,
         decTel = np.average(decs)
     tmp = np.array([ras, decs])
     tmp = ctrans(xyin=tmp,
-                 za=0., mode="sky_pfi", inr=0., pa=posang,
-                 cent=np.array([raTel, decTel]),
+                 mode="sky_pfi", pa=posang,
+                 cent=np.array([raTel, decTel]).reshape((2,1)),
                  time=time)
     return tmp[0, :] + 1j*tmp[1, :]
 
