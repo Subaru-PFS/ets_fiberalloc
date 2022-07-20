@@ -308,6 +308,15 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
 
     nvisits = len(tpos)
 
+    # sanity check for science targets: make sure that partialObservationCost
+    # is larger than nonObservationCost
+    for key, val in classdict.items():
+        if not val["calib"]:
+            if val["partialObservationCost"] < val["nonObservationCost"]:
+                raise ValueError(
+                    "found a target class where partialObservationCost "
+                    "is smaller than nonObservationCost")
+
     if cobraLocationGroup is not None:
         maxLocGroup = max(cobraLocationGroup)
         locationVars = [[[] for _ in range(maxLocGroup+1)] for _ in range(nvisits)]
