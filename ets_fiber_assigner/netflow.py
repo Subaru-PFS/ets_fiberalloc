@@ -43,10 +43,15 @@ def _get_vis_and_elbow(bench, tpos):
     elb = tselect.accessibleTargetElbows
     res = defaultdict(list)
 
+#    observable_targets = set()
     for cbr in range(tmp.shape[0]):
+#        observable_targets = observable_targets | set(tmp[cbr, :])
         for i, tidx in enumerate(tmp[cbr, :]):
             if tidx >= 0:
                 res[tidx].append((cbr, elb[cbr, i]))
+
+#    nonobservable_targets = set(range(len(tpos))).difference(observable_targets)
+#    return res, nonobservable_targets
     return res
 
 
@@ -234,6 +239,25 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
         (outer list)
     classdict : dict(string : dict(string : <param>))
         properties of target classes
+        Each target class *must* have the following entries:
+         - "calib" : bool
+           whether the target class is a calibration target class
+           (otherwise it is a science target class)
+         - "nonObservationCost" : float
+           the penalty for each object in that class which should be observed,
+           but isn't
+        Each calibration target class has the following additional entries:
+         - "numRequired" : int
+           the number of targets from that class which must be observed
+           *during every exposure*
+        Each science target class has the following additional entries:
+         - "partialObservationCost" : float
+           the penalty for every target of that class which is observed, but
+           not to its full required time.
+           This *must* be higher than "nonObservationCost".
+         - "nobs_max" : integer, optional
+           The number of members of this class that should be observed (default:
+           all of them).
     tvisit : float
         duration of a single visit in seconds
     vis_cost : list of float (nvisit entries)
@@ -278,6 +302,10 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
     instrumentRegionPenalty : float
         how much to increase the cost function for every "missing" sky target
         in an instrument region
+
+    Returns
+    =======
+    LPProblem : the ILP problem object
     """
     Cv_i = defaultdict(list)  # Cobra visit inflows
     Tv_o = defaultdict(list)  # Target visit outflows
