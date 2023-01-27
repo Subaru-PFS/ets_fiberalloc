@@ -15,7 +15,7 @@ def _get_colliding_pairs(bench, tpos, vis, dist):
         nb = bench.getCobraNeighbors(cidx)
         i2 = np.concatenate([ivis[j] for j in nb if j in ivis])
         i2 = np.concatenate((i1, i2))
-        i2 = np.unique(i2).astype(np.int_)
+        i2 = np.unique(i2).astype(int)
         d = np.abs(np.subtract.outer(tpos[i1], tpos[i2]))
         for m in range(d.shape[0]):
             for n in range(d.shape[1]):
@@ -71,7 +71,7 @@ def _get_elbow_collisions(bench, tpos, vis, dist):
         tmp = [ivis[j] for j in nb if j in ivis]
         if tmp != []:
             i2 = np.concatenate([ivis[j] for j in nb if j in ivis])
-            i2 = np.unique(i2).astype(np.int_)
+            i2 = np.unique(i2).astype(int)
             # for each target visible by this cobra and the corresponding elbow
             # position, find all targets which are too close to the "upper arm"
             # of the cobra
