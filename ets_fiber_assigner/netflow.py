@@ -15,7 +15,7 @@ def _get_colliding_pairs(bench, tpos, vis, dist):
         nb = bench.getCobraNeighbors(cidx)
         i2 = np.concatenate([ivis[j] for j in nb if j in ivis])
         i2 = np.concatenate((i1, i2))
-        i2 = np.unique(i2).astype(np.int)
+        i2 = np.unique(i2).astype(np.int_)
         d = np.abs(np.subtract.outer(tpos[i1], tpos[i2]))
         for m in range(d.shape[0]):
             for n in range(d.shape[1]):
@@ -71,7 +71,7 @@ def _get_elbow_collisions(bench, tpos, vis, dist):
         tmp = [ivis[j] for j in nb if j in ivis]
         if tmp != []:
             i2 = np.concatenate([ivis[j] for j in nb if j in ivis])
-            i2 = np.unique(i2).astype(np.int)
+            i2 = np.unique(i2).astype(np.int_)
             # for each target visible by this cobra and the corresponding elbow
             # position, find all targets which are too close to the "upper arm"
             # of the cobra
@@ -224,7 +224,7 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                  cobraLocationGroup=None, minSkyTargetsPerLocation=None,
                  locationGroupPenalty=None,
                  cobraInstrumentRegion=None, minSkyTargetsPerInstrumentRegion=None,
-                 instrumentRegionPenalty=None):
+                 instrumentRegionPenalty=None, blackSpotPenalty=None):
     """Build the ILP problem for a given observation task
 
     Parameters
@@ -263,9 +263,9 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
     vis_cost : list of float (nvisit entries)
         cost for observing a target in a given visit. This can be used to make
         the solver prefer earlier over later observations
-    cobraMoveCost : lambda taking a float
+    cobraMoveCost : function taking a float and returning a float
         extra cost when observing a target at a given distance from the center
-        of the observing cobra. Can be used to make Cobras prefer target closer
+        of the observing cobra. Can be used to make Cobras prefer targets closer
         to the center of their patrol region.
     collision_distance : float
         collision distance between cobra tips
@@ -302,6 +302,11 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
     instrumentRegionPenalty : float
         how much to increase the cost function for every "missing" sky target
         in an instrument region
+    blackSpotPenalty : function taking a float and returning a float
+        extra cost when observing a target at a given distance from the center
+        of a black spot. Can be used to make Cobras prefer targets farther away
+        from a black spot to reduce vignetting.
+        The distance parameter is expected in millimeters.
 
     Returns
     =======
@@ -430,6 +435,11 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                 if cobraMoveCost is not None:
                     dist = np.abs(bench.cobras.centers[cidx]-tpos[ivis][tidx])
                     tcost += cobraMoveCost(dist)
+                prob.cost += f*tcost
+                if blackSpotPenalty is not None:
+                    # FIXME: this is not yet sufficient, 
+                    dist = np.abs(bench.blackDots.centers[cidx]-tpos[ivis][tidx])
+                    tcost += blackSpotPenalty(dist)
                 prob.cost += f*tcost
 
         # Constraints
