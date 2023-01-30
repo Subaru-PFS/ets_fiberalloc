@@ -84,6 +84,14 @@ def _get_elbow_collisions(bench, tpos, vis, dist):
     return res
 
 
+def getClosestDots(bench):
+    res = []
+    for cidx in range(len(bench.cobras.centers)):
+        nb = bench.getCobraNeighbors(cidx)
+        res.append(bench.blackDots.centers[[cidx] + list(nb)])
+    return res
+
+
 class LPProblem(object):
     def __init__(self):
         self._vardict={}
@@ -224,7 +232,7 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                  cobraLocationGroup=None, minSkyTargetsPerLocation=None,
                  locationGroupPenalty=None,
                  cobraInstrumentRegion=None, minSkyTargetsPerInstrumentRegion=None,
-                 instrumentRegionPenalty=None, blackSpotPenalty=None):
+                 instrumentRegionPenalty=None, blackDotPenalty=None):
     """Build the ILP problem for a given observation task
 
     Parameters
@@ -302,10 +310,10 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
     instrumentRegionPenalty : float
         how much to increase the cost function for every "missing" sky target
         in an instrument region
-    blackSpotPenalty : function taking a float and returning a float
+    blackDotPenalty : function taking a float and returning a float
         extra cost when observing a target at a given distance from the center
-        of a black spot. Can be used to make Cobras prefer targets farther away
-        from a black spot to reduce vignetting.
+        of a black dot. Can be used to make Cobras prefer targets farther away
+        from a black dot to reduce vignetting.
         The distance parameter is expected in millimeters.
 
     Returns
@@ -324,6 +332,9 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
         prob = GurobiProblem(extraOptions=gurobiOptions)
     else:
         prob = PulpProblem()
+
+    if blackDotPenalty is not None:
+        closestDotsList = getClosestDots(bench)
 
     nreqvisit = []
     ndone = []
@@ -436,10 +447,9 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                     dist = np.abs(bench.cobras.centers[cidx]-tpos[ivis][tidx])
                     tcost += cobraMoveCost(dist)
                 prob.cost += f*tcost
-                if blackSpotPenalty is not None:
-                    # FIXME: this is not yet sufficient, 
-                    dist = np.abs(bench.blackDots.centers[cidx]-tpos[ivis][tidx])
-                    tcost += blackSpotPenalty(dist)
+                if blackDotPenalty is not None:
+                    dist = np.min(np.abs(closestDotsList[cidx]-tpos[ivis][tidx]))
+                    tcost += blackDotPenalty(dist)
                 prob.cost += f*tcost
 
         # Constraints
