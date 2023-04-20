@@ -43,10 +43,15 @@ def _get_vis_and_elbow(bench, tpos):
     elb = tselect.accessibleTargetElbows
     res = defaultdict(list)
 
+#    observable_targets = set()
     for cbr in range(tmp.shape[0]):
+#        observable_targets = observable_targets | set(tmp[cbr, :])
         for i, tidx in enumerate(tmp[cbr, :]):
             if tidx >= 0:
                 res[tidx].append((cbr, elb[cbr, i]))
+
+#    nonobservable_targets = set(range(len(tpos))).difference(observable_targets)
+#    return res, nonobservable_targets
     return res
 
 
@@ -234,6 +239,25 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
         (outer list)
     classdict : dict(string : dict(string : <param>))
         properties of target classes
+        Each target class *must* have the following entries:
+         - "calib" : bool
+           whether the target class is a calibration target class
+           (otherwise it is a science target class)
+         - "nonObservationCost" : float
+           the penalty for each object in that class which should be observed,
+           but isn't
+        Each calibration target class has the following additional entries:
+         - "numRequired" : int
+           the number of targets from that class which must be observed
+           *during every exposure*
+        Each science target class has the following additional entries:
+         - "partialObservationCost" : float
+           the penalty for every target of that class which is observed, but
+           not to its full required time.
+           This *must* be higher than "nonObservationCost".
+         - "nobs_max" : integer, optional
+           The number of members of this class that should be observed (default:
+           all of them).
     tvisit : float
         duration of a single visit in seconds
     vis_cost : list of float (nvisit entries)
@@ -278,6 +302,10 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
     instrumentRegionPenalty : float
         how much to increase the cost function for every "missing" sky target
         in an instrument region
+
+    Returns
+    =======
+    LPProblem : the ILP problem object
     """
     Cv_i = defaultdict(list)  # Cobra visit inflows
     Tv_o = defaultdict(list)  # Target visit outflows
@@ -307,6 +335,15 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
             ndone.append(0)
 
     nvisits = len(tpos)
+
+    # sanity check for science targets: make sure that partialObservationCost
+    # is larger than nonObservationCost
+    for key, val in classdict.items():
+        if not val["calib"]:
+            if val["partialObservationCost"] < val["nonObservationCost"]:
+                raise ValueError(
+                    "found a target class where partialObservationCost "
+                    "is smaller than nonObservationCost")
 
     if cobraLocationGroup is not None:
         maxLocGroup = max(cobraLocationGroup)
@@ -452,7 +489,7 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                                        prob.sum(flows) == 0])
                 else:
                     raise RuntimeError("oops")
-                   
+
 
     for c in constr:
         # We add the collision constraints as lazy in the hope that this will
@@ -550,8 +587,8 @@ class Telescope(object):
         for i, t in enumerate(tgt):
             tmp[0, i], tmp[1, i] = t.ra, t.dec
         tmp = ctrans(xyin=tmp,
-            za=0., mode="sky_pfi", inr=0., pa=self._posang,
-            cent=np.array([self._ra, self._dec]), time=self._time)
+            mode="sky_pfi", pa=self._posang,
+            cent=np.array([self._ra, self._dec]).reshape((2,1)), time=self._time)
         return tmp[0, :] + 1j*tmp[1, :]
 
 
@@ -561,10 +598,13 @@ class Target(object):
     determine its position on the focal plane, once also the telescope attitude
     is known. """
 
-    def __init__(self, ID, ra, dec, targetclass):
+    def __init__(self, ID, ra, dec, targetclass, pmra=0, pmdec=0, parallax=0):
         self._ID = str(ID)
         self._ra = float(ra)
         self._dec = float(dec)
+        self._pmra = float(pmra)
+        self._pmdec = float(pmdec)
+        self._parallax = float(parallax)
         self._targetclass = targetclass
 
     @property
@@ -574,13 +614,28 @@ class Target(object):
 
     @property
     def ra(self):
-        """the rectascension : float"""
+        """the rectascension in degrees : float"""
         return self._ra
 
     @property
     def dec(self):
-        """the declination : float"""
+        """the declination in degrees : float"""
         return self._dec
+
+    @property
+    def pmra(self):
+        """the rectascension component of proper motion in mas/yr : float"""
+        return self._pmra
+
+    @property
+    def pmdec(self):
+        """the declination component of proper motion in mas/yr : float"""
+        return self._pmdec
+
+    @property
+    def parallax(self):
+        """the parallax in mas : float"""
+        return self._parallax
 
     @property
     def targetclass(self):
@@ -595,9 +650,10 @@ class ScienceTarget(Target):
     All different types of ScienceTarget need to be derived from this class."
     """
 
-    def __init__(self, ID, ra, dec, obs_time, pri, prefix):
+    def __init__(self, ID, ra, dec, obs_time, pri, prefix, pmra=0, pmdec=0, parallax=0):
         super(ScienceTarget, self).__init__(ID, ra, dec,
-                                            "{}_P{}".format(prefix, pri))
+                                            "{}_P{}".format(prefix, pri),
+                                            pmra=pmra, pmdec=pmdec, parallax=parallax)
         self._obs_time = float(obs_time)
         self._pri = int(pri)
 
@@ -667,6 +723,10 @@ def readScientificFromFile(file, prefix):
     =======
     list of ScienceTarget : the created ScienceTarget objects
     """
+
+    # FIXME: add a routine that can read proper motion and parallax information
+    #        from the file, as soon as the file format has been defined
+
     try:
         # first try reading as ecsv format
         t = Table.read(file, format="ascii.ecsv")
