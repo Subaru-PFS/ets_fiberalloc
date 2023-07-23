@@ -2,6 +2,7 @@ import numpy as np
 from collections import defaultdict
 from astropy.table import Table
 
+
 def _get_colliding_pairs(bench, tpos, vis, dist):
     tpos = np.array(tpos)
     ivis = defaultdict(list)
@@ -45,7 +46,7 @@ def _get_vis_and_elbow(bench, tpos):
 
 #    observable_targets = set()
     for cbr in range(tmp.shape[0]):
-#        observable_targets = observable_targets | set(tmp[cbr, :])
+        #        observable_targets = observable_targets | set(tmp[cbr, :])
         for i, tidx in enumerate(tmp[cbr, :]):
             if tidx >= 0:
                 res[tidx].append((cbr, elb[cbr, i]))
@@ -94,8 +95,8 @@ def getClosestDots(bench):
 
 class LPProblem(object):
     def __init__(self):
-        self._vardict={}
-        self._constraintdict={}
+        self._vardict = {}
+        self._constraintdict = {}
 
     def varByName(self, name):
         return self._vardict[name]
@@ -127,7 +128,7 @@ class GurobiProblem(LPProblem):
             var = self._prob.addVar(name=name, vtype=gbp.GRB.BINARY)
         else:
             var = self._prob.addVar(lb=lo, ub=hi, name=name,
-                                     vtype=gbp.GRB.INTEGER)
+                                    vtype=gbp.GRB.INTEGER)
         self._vardict[name] = var
         return var
 
@@ -510,7 +511,6 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                 else:
                     raise RuntimeError("oops")
 
-
     for c in constr:
         # We add the collision constraints as lazy in the hope that this will
         # speed up the solution
@@ -525,13 +525,13 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
     # every visit
     for key, value in CTCv_o.items():
         prob.add_constraint(makeName("CTCv_min", key[0], key[1]),
-            prob.sum([v for v in value]) >= classdict[key[0]]["numRequired"])
+                            prob.sum([v for v in value]) >= classdict[key[0]]["numRequired"])
 
     # inflow and outflow at every Tv node must be balanced
     for key, ival in Tv_i.items():
         oval = Tv_o[key]
         prob.add_constraint(makeName("TvIO", targets[key[0]].ID, key[1]),
-            prob.sum([v for v in ival]+[-v[0] for v in oval]) == 0)
+                            prob.sum([v for v in ival]+[-v[0] for v in oval]) == 0)
 
     # inflow and outflow at every T node must be balanced
     for key, ival in T_i.items():
@@ -540,7 +540,7 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
         if nvis < 0:
             nvis = 0
         prob.add_constraint(makeName("TIO", targets[key].ID),
-            prob.sum([nvis*v for v in ival]+[-v for v in oval]) == 0)
+                            prob.sum([nvis*v for v in ival]+[-v for v in oval]) == 0)
 
     # Science targets must be either observed or go to the sink
     for key, val in STC_o.items():
@@ -548,21 +548,21 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
         if "nobs_max" in classdict[key]:
             n_obs = classdict[key]["nobs_max"]
         prob.add_constraint(makeName("ST", key[0], key[1]),
-            prob.sum([v for v in val]) == n_obs)
+                            prob.sum([v for v in val]) == n_obs)
 
     # Make sure that there are enough sky targets in every Cobra location group
     if cobraLocationGroup is not None:
         for ivis in range(nvisits):
             for i in range(maxLocGroup+1):
-                prob.add_constraint(makeName("LocGrp",ivis,i),
-                    prob.sum([v for v in locationVars[ivis][i]]) >= minSkyTargetsPerLocation)
+                prob.add_constraint(makeName("LocGrp", ivis, i),
+                                    prob.sum([v for v in locationVars[ivis][i]]) >= minSkyTargetsPerLocation)
 
     # Make sure that there are enough sky targets in every Cobra instrument region
     if cobraInstrumentRegion is not None:
         for ivis in range(nvisits):
             for i in range(maxInstRegion+1):
-                prob.add_constraint(makeName("InstReg",ivis,i),
-                    prob.sum([v for v in regionVars[ivis][i]]) >= minSkyTargetsPerInstrumentRegion)
+                prob.add_constraint(makeName("InstReg", ivis, i),
+                                    prob.sum([v for v in regionVars[ivis][i]]) >= minSkyTargetsPerInstrumentRegion)
 
     return prob
 
@@ -603,12 +603,21 @@ class Telescope(object):
             the focal plane positions encoded as complex numbers
         """
         from pfs.utils.coordinates.CoordTransp import CoordinateTransform as ctrans
-        tmp = np.zeros((2,len(tgt)), dtype=np.float64)
+        tmp = np.zeros((2, len(tgt)), dtype=np.float64)
         for i, t in enumerate(tgt):
             tmp[0, i], tmp[1, i] = t.ra, t.dec
-        tmp = ctrans(xyin=tmp,
-            mode="sky_pfi", pa=self._posang,
-            cent=np.array([self._ra, self._dec]).reshape((2,1)), time=self._time)
+        tmp = ctrans(
+            xyin=tmp,
+            mode="sky_pfi",
+            pa=self._posang,
+            cent=np.array([self._ra, self._dec]).reshape((2, 1)),
+            pm=np.stack([[t.pmra for t in tgt], [t.pmdec for t in tgt]], axis=0),
+            par=np.array([t.parallax for t in tgt]),
+            time=self._time,
+            # epoch=np.array([t.epoch for t in tgt]),
+            epoch=2000.0,
+        )
+
         return tmp[0, :] + 1j*tmp[1, :]
 
 
@@ -618,13 +627,14 @@ class Target(object):
     determine its position on the focal plane, once also the telescope attitude
     is known. """
 
-    def __init__(self, ID, ra, dec, targetclass, pmra=0, pmdec=0, parallax=0):
+    def __init__(self, ID, ra, dec, targetclass, pmra=0, pmdec=0, parallax=0, epoch=2000.0):
         self._ID = str(ID)
         self._ra = float(ra)
         self._dec = float(dec)
         self._pmra = float(pmra)
         self._pmdec = float(pmdec)
         self._parallax = float(parallax)
+        self._epoch = float(epoch)
         self._targetclass = targetclass
 
     @property
@@ -658,6 +668,11 @@ class Target(object):
         return self._parallax
 
     @property
+    def epoch(self):
+        """epoch : float"""
+        return self._epoch
+
+    @property
     def targetclass(self):
         """string representation of the target's class"""
         return self._targetclass
@@ -670,10 +685,11 @@ class ScienceTarget(Target):
     All different types of ScienceTarget need to be derived from this class."
     """
 
-    def __init__(self, ID, ra, dec, obs_time, pri, prefix, pmra=0, pmdec=0, parallax=0):
+    def __init__(self, ID, ra, dec, obs_time, pri, prefix, pmra=0, pmdec=0, parallax=0, epoch=2000.):
         super(ScienceTarget, self).__init__(ID, ra, dec,
                                             "{}_P{}".format(prefix, pri),
-                                            pmra=pmra, pmdec=pmdec, parallax=parallax)
+                                            pmra=pmra, pmdec=pmdec, parallax=parallax, epoch=epoch
+                                            )
         self._obs_time = float(obs_time)
         self._pri = int(pri)
 
@@ -688,8 +704,11 @@ class ScienceTarget(Target):
 
 class CalibTarget(Target):
     """Derived from the Target class."""
-    def __init__(self, ID, ra, dec, targetclass, penalty=0.):
-        super(CalibTarget, self).__init__(ID, ra, dec, targetclass)
+
+    def __init__(self, ID, ra, dec, targetclass, penalty=0., pmra=0, pmdec=0, parallax=0, epoch=2000.):
+        super(CalibTarget, self).__init__(ID, ra, dec, targetclass,
+                                          pmra=pmra, pmdec=pmdec, parallax=parallax, epoch=epoch
+                                          )
         self._penalty = penalty
 
 
@@ -752,7 +771,8 @@ def readScientificFromFile(file, prefix):
         t = Table.read(file, format="ascii.ecsv")
         res = []
         for r in t:
-            res.append(ScienceTarget(r["ID"], r["R.A."], r["Dec."], r["Exposure Time"], r["Priority"], prefix))
+            res.append(ScienceTarget(r["ID"], r["R.A."], r["Dec."],
+                       r["Exposure Time"], r["Priority"], prefix))
         return res
     except:
         pass
