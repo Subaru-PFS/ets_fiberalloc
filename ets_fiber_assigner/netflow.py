@@ -614,8 +614,8 @@ class Telescope(object):
             pm=np.stack([[t.pmra for t in tgt], [t.pmdec for t in tgt]], axis=0),
             par=np.array([t.parallax for t in tgt]),
             time=self._time,
-            # epoch=np.array([t.epoch for t in tgt]),
-            epoch=2000.0,
+            #epoch=np.array([t.epoch for t in tgt]),
+            epoch=2016.0,  # FIXME?
         )
 
         return tmp[0, :] + 1j*tmp[1, :]
