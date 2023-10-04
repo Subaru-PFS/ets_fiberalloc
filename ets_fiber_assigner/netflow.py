@@ -234,7 +234,8 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                  locationGroupPenalty=None,
                  cobraInstrumentRegion=None, minSkyTargetsPerInstrumentRegion=None,
                  instrumentRegionPenalty=None, blackDotPenalty=None,
-                 numReservedFibers=0):
+                 numReservedFibers=0,
+                 fiberNonAllocationCost=0.):
     """Build the ILP problem for a given observation task
 
     Parameters
@@ -320,6 +321,10 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
     numReservedFibers : integer
         ensure that at least this number of fibers is kept unassigned during
         every single visit
+    fiberNonAllocationCost : float
+        each unallocated fiber will increase the cost of the solution by this
+        amount. This tries to ensure that as many fibers as possible are
+        observing something, even if it is, for example, surplus sky targets.
 
     Returns
     =======
@@ -458,6 +463,11 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                     dist = np.min(np.abs(closestDotsList[cidx]-tpos[ivis][tidx]))
                     tcost += blackDotPenalty(dist)
                 prob.cost += f*tcost
+        # If requested, penalize non-allocated fibers
+        if fiberNonAllocationCost != 0:
+            relevantVars = [var for (keys, var) in Cv_i.items() if keys[1] == ivis]
+            prob.cost += fiberNonAllocationCost*(bench.cobras.nCobras-prob.sum(relevantVars))
+        
 
         # Constraints
         print("adding constraints")
