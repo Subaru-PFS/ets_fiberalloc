@@ -233,7 +233,8 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                  cobraLocationGroup=None, minSkyTargetsPerLocation=None,
                  locationGroupPenalty=None,
                  cobraInstrumentRegion=None, minSkyTargetsPerInstrumentRegion=None,
-                 instrumentRegionPenalty=None, blackDotPenalty=None):
+                 instrumentRegionPenalty=None, blackDotPenalty=None,
+                 numReservedFibers=0):
     """Build the ILP problem for a given observation task
 
     Parameters
@@ -316,6 +317,9 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
         of a black dot. Can be used to make Cobras prefer targets farther away
         from a black dot to reduce vignetting.
         The distance parameter is expected in millimeters.
+    numReservedFibers : integer
+        ensure that at least this number of fibers is kept unassigned during
+        every single visit
 
     Returns
     =======
@@ -564,6 +568,13 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                 prob.add_constraint(makeName("InstReg", ivis, i),
                                     prob.sum([v for v in regionVars[ivis][i]]) >= minSkyTargetsPerInstrumentRegion)
 
+    # Make sure that enough fibers are kept unassigned, if this was requested
+    if numReservedFibers > 0:
+        maxAssignableFibers = bench.cobras.nCobras-numReservedFibers
+        for ivis in range(nvisits):
+            relevantVars = [var for (keys, var) in Cv_i.items() if keys[1] == ivis]
+            prob.add_constraint(makeName("FiberLimit",ivis),
+                prob.sum(relevantVars) <= maxAssignableFibers)
     return prob
 
 
