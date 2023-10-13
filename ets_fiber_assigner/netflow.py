@@ -465,6 +465,7 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
         # If requested, penalize non-allocated fibers
         if fiberNonAllocationCost != 0:
             relevantVars = [var for (keys, var) in Cv_i.items() if keys[1] == ivis]
+            relevantVars = [item for sublist in relevantVars for item in sublist]
             prob.cost += fiberNonAllocationCost*(bench.cobras.nCobras-prob.sum(relevantVars))
         
 
@@ -583,6 +584,7 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
         maxAssignableFibers = bench.cobras.nCobras-numReservedFibers
         for ivis in range(nvisits):
             relevantVars = [var for (keys, var) in Cv_i.items() if keys[1] == ivis]
+            relevantVars = [item for sublist in relevantVars for item in sublist]
             prob.add_constraint(makeName("FiberLimit",ivis),
                 prob.sum(relevantVars) <= maxAssignableFibers)
     return prob
