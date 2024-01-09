@@ -235,7 +235,8 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                  cobraInstrumentRegion=None, minSkyTargetsPerInstrumentRegion=None,
                  instrumentRegionPenalty=None, blackDotPenalty=None,
                  numReservedFibers=0,
-                 fiberNonAllocationCost=0.):
+                 fiberNonAllocationCost=0.,
+                 obsprog_time_budget={}):
     """Build the ILP problem for a given observation task
 
     Parameters
@@ -325,6 +326,11 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
         each unallocated fiber will increase the cost of the solution by this
         amount. This tries to ensure that as many fibers as possible are
         observing something, even if it is, for example, surplus sky targets.
+    obsprog_time_budget : dict (tuple of science target classes: float)
+        If there are time budgets for any observation program, they can be
+        enforced with this parameter. They key of each entry is a tuple of
+        science target class names that fall under the budget, the value is the
+        maximum number of fiber hours to be spent on targets from these classes.
 
     Returns
     =======
@@ -564,6 +570,22 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
             n_obs = classdict[key]["nobs_max"]
         prob.add_constraint(makeName("ST", key[0], key[1]),
                             prob.sum([v for v in val]) == n_obs)
+
+    # Science targets inside a given program must not get more observation time
+    # than allowed by the time budget
+    budgetvars = defaultdict(list)
+    for key, val in Tv_i.items():
+        tidx = key[0]
+        tgt = targets[tidx]
+        for classes, budget in obsprog_time_budget.items():
+            if tgt.targetclass in classes:
+                budgetvars[classes].append(val) 
+
+    budgetcount=0
+    for key, val in budgetvars.items():
+        prob.add_constraint(makeName("budget", str(budgetcount)),
+                            tvisit*prob.sum([v for v in val]) <= 3600.*obsprog_time_budget[key])
+        budgetcount += 1
 
     # Make sure that there are enough sky targets in every Cobra location group
     if cobraLocationGroup is not None:
