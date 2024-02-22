@@ -579,7 +579,7 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
         tgt = targets[tidx]
         for classes, budget in obsprog_time_budget.items():
             if tgt.targetclass in classes:
-                budgetvars[classes].append(val) 
+                budgetvars[classes].append(val[0]) 
 
     budgetcount=0
     for key, val in budgetvars.items():
