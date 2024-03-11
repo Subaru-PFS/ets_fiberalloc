@@ -331,6 +331,13 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
         enforced with this parameter. They key of each entry is a tuple of
         science target class names that fall under the budget, the value is the
         maximum number of fiber hours to be spent on targets from these classes.
+    secondStage : bool
+        default : False
+        if False, only targets with hierarchy==1 will be considered for
+        assignment, otherwise only targets with hierarchy>1.
+    preassigned : list ( list (tuple(CobraID, TargetID))) or None
+        the outer list must have the same length as tpos
+        description of pre-assigned Cobras and the targets they are assigned to.
 
     Returns
     =======
@@ -670,9 +677,13 @@ class Target(object):
     """Base class for all target types observable with PFS. All targets are
     initialized with RA/Dec and an ID string. From RA/Dec, the target can
     determine its position on the focal plane, once also the telescope attitude
-    is known. """
+    is known.
+    Each target also has an integer `hierarchy` for multi-stage assignment.
+    At stage 1, only targets with `hierarchy==1` are taken into account,at stage
+    2 only targets with `hierarchy>1`. """
 
-    def __init__(self, ID, ra, dec, targetclass, pmra=0, pmdec=0, parallax=0, epoch=2000.0):
+    def __init__(self, ID, ra, dec, targetclass, pmra=0, pmdec=0, parallax=0,
+                 epoch=2000.0, hierarchy=1):
         self._ID = str(ID)
         self._ra = float(ra)
         self._dec = float(dec)
@@ -681,6 +692,7 @@ class Target(object):
         self._parallax = float(parallax)
         self._epoch = float(epoch)
         self._targetclass = targetclass
+        self._hierarchy = int(hierarchy)
 
     @property
     def ID(self):
@@ -722,6 +734,11 @@ class Target(object):
         """string representation of the target's class"""
         return self._targetclass
 
+    @property
+    def hierarchy(self):
+        """the hierarchy of the target : int"""
+        return self._hierarchy
+
 
 class ScienceTarget(Target):
     """Derived from the Target class, with the additional attributes priority
@@ -730,10 +747,11 @@ class ScienceTarget(Target):
     All different types of ScienceTarget need to be derived from this class."
     """
 
-    def __init__(self, ID, ra, dec, obs_time, pri, prefix, pmra=0, pmdec=0, parallax=0, epoch=2000.):
+    def __init__(self, ID, ra, dec, obs_time, pri, prefix, pmra=0, pmdec=0,
+                 parallax=0, epoch=2000., hierarchy=1):
         super(ScienceTarget, self).__init__(ID, ra, dec,
                                             "{}_P{}".format(prefix, pri),
-                                            pmra=pmra, pmdec=pmdec, parallax=parallax, epoch=epoch
+                                            pmra=pmra, pmdec=pmdec, parallax=parallax, epoch=epoch,hierarchy=hierarchy
                                             )
         self._obs_time = float(obs_time)
         self._pri = int(pri)
@@ -750,9 +768,10 @@ class ScienceTarget(Target):
 class CalibTarget(Target):
     """Derived from the Target class."""
 
-    def __init__(self, ID, ra, dec, targetclass, penalty=0., pmra=0, pmdec=0, parallax=0, epoch=2000.):
+    def __init__(self, ID, ra, dec, targetclass, penalty=0., pmra=0, pmdec=0,
+                 parallax=0, epoch=2000.,hierarchy=1):
         super(CalibTarget, self).__init__(ID, ra, dec, targetclass,
-                                          pmra=pmra, pmdec=pmdec, parallax=parallax, epoch=epoch
+                                          pmra=pmra, pmdec=pmdec, parallax=parallax, epoch=epoch,hierarchy=hierarchy
                                           )
         self._penalty = penalty
 
@@ -816,8 +835,12 @@ def readScientificFromFile(file, prefix):
         t = Table.read(file, format="ascii.ecsv")
         res = []
         for r in t:
+            try:
+                hier = int(r["Hierarchy"])
+            except KeyError:
+                hier = 1
             res.append(ScienceTarget(r["ID"], r["R.A."], r["Dec."],
-                       r["Exposure Time"], r["Priority"], prefix))
+                       r["Exposure Time"], r["Priority"], prefix, hierarchy=hier))
         return res
     except:
         pass
@@ -855,7 +878,12 @@ def readCalibrationFromFile(file, targetclass):
         t = Table.read(file, format="ascii.ecsv")
         res = []
         for r in t:
-            res.append(CalibTarget(r["ID"], r["R.A."], r["Dec."], targetclass))
+            try:
+                hier = int(r["Hierarchy"])
+            except KeyError:
+                hier = 1
+            res.append(CalibTarget(r["ID"], r["R.A."], r["Dec."], targetclass,
+                                   hierarchy=hier))
         return res
     except:
         pass
@@ -878,7 +906,7 @@ def readCalibrationWithPenaltyFromFile(file, targetclass):
     Parameters
     ==========
     file : string
-        the name os the text file containing the target information
+        the name of the text file containing the target information
     targetclass : string
         the name of the target class to which these targets will belong
 
@@ -889,5 +917,10 @@ def readCalibrationWithPenaltyFromFile(file, targetclass):
     t = Table.read(file, format="ascii.ecsv")
     res = []
     for r in t:
-        res.append(CalibTarget(r["ID"], r["R.A."], r["Dec."], targetclass, r["penalty"]))
+            try:
+                hier = int(r["Hierarchy"])
+            except KeyError:
+                hier = 1
+        res.append(CalibTarget(r["ID"], r["R.A."], r["Dec."], targetclass,
+                               r["penalty"], hierarchy=hier))
     return res
