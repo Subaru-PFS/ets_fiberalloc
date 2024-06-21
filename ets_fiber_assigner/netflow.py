@@ -236,7 +236,9 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                  instrumentRegionPenalty=None, blackDotPenalty=None,
                  numReservedFibers=0,
                  fiberNonAllocationCost=0.,
-                 obsprog_time_budget={}):
+                 obsprog_time_budget={},
+                 stage=0,
+                 preassigned=None):
     """Build the ILP problem for a given observation task
 
     Parameters
@@ -331,6 +333,15 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
         enforced with this parameter. They key of each entry is a tuple of
         science target class names that fall under the budget, the value is the
         maximum number of fiber hours to be spent on targets from these classes.
+    stage : int
+        default : 0
+        only targets with this stage property will be considered for
+        assignment.
+    preassigned : list (dict(TargetID: Cobra index)) or None
+        Description of pre-assigned targets and the Cobra indices they are
+        assigned to, for every visit.
+        NOTE: since this data structure contains Cobra indices, the `bench`
+        object must be identical to the one used to produce those indices! 
 
     Returns
     =======
@@ -367,6 +378,9 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
             ndone.append(0)
 
     nvisits = len(tpos)
+
+    if preassigned is None:
+        preassigned = [{}] * nvisits
 
     # sanity check for science targets: make sure that partialObservationCost
     # is larger than nonObservationCost
@@ -418,6 +432,10 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
         vis = _get_vis_and_elbow(bench, tpos[ivis])
         for tidx, thing in vis.items():
             tgt = targets[tidx]
+            # check if we need to worry about this target in this stage
+            if (tgt.stage != stage) and (tgt.ID not in preassigned[ivis].keys()):
+                continue
+                    
             TC = tgt.targetclass
             Class = classdict[TC]
             if isinstance(tgt, ScienceTarget):
@@ -609,6 +627,22 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
             relevantVars = [item for sublist in relevantVars for item in sublist]
             prob.add_constraint(makeName("FiberLimit",ivis),
                 prob.sum(relevantVars) <= maxAssignableFibers)
+
+    # fix the pre-assigned targets
+    tgtid2idx = {}
+    for idx, tgt in enumerate(targets):
+        tgtid2idx[tgt.ID] = idx
+    for ivis in range(nvisits):
+        for tgtid, cidx in preassigned[ivis].items():
+            tidx = tgtid2idx[tgtid]
+            varname = makeName("Tv_Cv", tidx, cidx, ivis)
+            if varname in prob._vardict:
+                prob.add_constraint(makeName("preassign",  tgtid2idx[tgtid], cidx, ivis),
+                                    prob._vardict[varname] == 1)
+            else:
+                raise RuntimeError("inconsistence: could not do preassignment "
+                                   f"of Cobra {cidx} to target {tgtid}")
+
     return prob
 
 
@@ -670,9 +704,13 @@ class Target(object):
     """Base class for all target types observable with PFS. All targets are
     initialized with RA/Dec and an ID string. From RA/Dec, the target can
     determine its position on the focal plane, once also the telescope attitude
-    is known. """
+    is known.
+    Each target also has an integer property `stage` for multi-stage assignment.
+    At stage 0, only targets with `stage==0` are taken into account, at stage
+    1 only targets with `stage==1` etc. """
 
-    def __init__(self, ID, ra, dec, targetclass, pmra=0, pmdec=0, parallax=0, epoch=2000.0):
+    def __init__(self, ID, ra, dec, targetclass, pmra=0, pmdec=0, parallax=0,
+                 epoch=2000.0, stage=0):
         self._ID = str(ID)
         self._ra = float(ra)
         self._dec = float(dec)
@@ -681,6 +719,7 @@ class Target(object):
         self._parallax = float(parallax)
         self._epoch = float(epoch)
         self._targetclass = targetclass
+        self._stage = int(stage)
 
     @property
     def ID(self):
@@ -722,6 +761,15 @@ class Target(object):
         """string representation of the target's class"""
         return self._targetclass
 
+    @property
+    def stage(self):
+        """the stage of the target : int"""
+        return self._stage
+
+    @stage.setter
+    def stage(self, value):
+        self._stage = int(value)
+
 
 class ScienceTarget(Target):
     """Derived from the Target class, with the additional attributes priority
@@ -730,10 +778,11 @@ class ScienceTarget(Target):
     All different types of ScienceTarget need to be derived from this class."
     """
 
-    def __init__(self, ID, ra, dec, obs_time, pri, prefix, pmra=0, pmdec=0, parallax=0, epoch=2000.):
+    def __init__(self, ID, ra, dec, obs_time, pri, prefix, pmra=0, pmdec=0,
+                 parallax=0, epoch=2000., stage=0):
         super(ScienceTarget, self).__init__(ID, ra, dec,
                                             "{}_P{}".format(prefix, pri),
-                                            pmra=pmra, pmdec=pmdec, parallax=parallax, epoch=epoch
+                                            pmra=pmra, pmdec=pmdec, parallax=parallax, epoch=epoch,stage=stage
                                             )
         self._obs_time = float(obs_time)
         self._pri = int(pri)
@@ -750,9 +799,10 @@ class ScienceTarget(Target):
 class CalibTarget(Target):
     """Derived from the Target class."""
 
-    def __init__(self, ID, ra, dec, targetclass, penalty=0., pmra=0, pmdec=0, parallax=0, epoch=2000.):
+    def __init__(self, ID, ra, dec, targetclass, penalty=0., pmra=0, pmdec=0,
+                 parallax=0, epoch=2000., stage=0):
         super(CalibTarget, self).__init__(ID, ra, dec, targetclass,
-                                          pmra=pmra, pmdec=pmdec, parallax=parallax, epoch=epoch
+                                          pmra=pmra, pmdec=pmdec, parallax=parallax, epoch=epoch, stage=stage
                                           )
         self._penalty = penalty
 
@@ -816,8 +866,12 @@ def readScientificFromFile(file, prefix):
         t = Table.read(file, format="ascii.ecsv")
         res = []
         for r in t:
+            try:
+                stg = int(r["stage"])
+            except KeyError:
+                stg = 0
             res.append(ScienceTarget(r["ID"], r["R.A."], r["Dec."],
-                       r["Exposure Time"], r["Priority"], prefix))
+                       r["Exposure Time"], r["Priority"], prefix, stage=stg))
         return res
     except:
         pass
@@ -830,7 +884,7 @@ def readScientificFromFile(file, prefix):
             if not l.startswith("#"):
                 tt = l.split()
                 id_, ra, dec, tm, pri = (
-                    str(tt[0])[1:], float(tt[1]), float(tt[2]),
+                    str(tt[0]), float(tt[1]), float(tt[2]),
                     float(tt[3]), int(tt[4]))
                 res.append(ScienceTarget(id_, ra, dec, tm, pri, prefix))
     return res
@@ -855,7 +909,12 @@ def readCalibrationFromFile(file, targetclass):
         t = Table.read(file, format="ascii.ecsv")
         res = []
         for r in t:
-            res.append(CalibTarget(r["ID"], r["R.A."], r["Dec."], targetclass))
+            try:
+                stg = int(r["stage"])
+            except KeyError:
+                stg = 0
+            res.append(CalibTarget(r["ID"], r["R.A."], r["Dec."], targetclass,
+                                   stage=stg))
         return res
     except:
         pass
@@ -867,7 +926,7 @@ def readCalibrationFromFile(file, targetclass):
         for l in ll[1:]:
             if not l.startswith("#"):
                 tt = l.split()
-                id_, ra, dec = (str(tt[0])[1:], float(tt[1]), float(tt[2]))
+                id_, ra, dec = (str(tt[0]), float(tt[1]), float(tt[2]))
                 res.append(CalibTarget(id_, ra, dec, targetclass))
     return res
 
@@ -878,7 +937,7 @@ def readCalibrationWithPenaltyFromFile(file, targetclass):
     Parameters
     ==========
     file : string
-        the name os the text file containing the target information
+        the name of the text file containing the target information
     targetclass : string
         the name of the target class to which these targets will belong
 
@@ -889,5 +948,10 @@ def readCalibrationWithPenaltyFromFile(file, targetclass):
     t = Table.read(file, format="ascii.ecsv")
     res = []
     for r in t:
-        res.append(CalibTarget(r["ID"], r["R.A."], r["Dec."], targetclass, r["penalty"]))
+        try:
+            stg = int(r["stage"])
+        except KeyError:
+            stg = 0
+        res.append(CalibTarget(r["ID"], r["R.A."], r["Dec."], targetclass,
+                               r["penalty"], stage=stg))
     return res
