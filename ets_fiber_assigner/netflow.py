@@ -147,6 +147,7 @@ class GurobiProblem(LPProblem):
     def solve(self):
         self._prob.setObjective(self.cost)
         self._prob.optimize()
+# FIXME: raise exception on error!
 
     def update(self):
         self._prob.update()
@@ -201,8 +202,9 @@ class PulpProblem(LPProblem):
         self._prob += self.cost
         for i in self._constr:
             self._prob += i
-        self._prob.solve(pulp.COIN_CMD(msg=1, keepFiles=0, maxSeconds=100,
+        self._prob.solve(pulp.COIN_CMD(msg=1, keepFiles=0, timeLimit=100,
                                        threads=1))
+# FIXME: raise exception on error!
 
     def update(self):
         pass
@@ -248,7 +250,7 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
     targets : list of Target objects
         all targets available for observation,
         i.e. science, sky and calibration targets
-    tpos : list of list of complex
+    tpos : list (length nvisit) of list of complex
         focal plane positions for all targets (inner list) and all visits
         (outer list)
     classdict : dict(string : dict(string : <param>))
@@ -272,8 +274,8 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
          - "nobs_max" : integer, optional
            The number of members of this class that should be observed (default:
            all of them).
-    tvisit : float
-        duration of a single visit in seconds
+    tvisit : float or list of floats wit length nvisit
+        duration of visits in seconds
     vis_cost : list of float (nvisit entries)
         cost for observing a target in a given visit. This can be used to make
         the solver prefer earlier over later observations
@@ -290,9 +292,9 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
         if True, use the Gurobi optimizer, otherwise use PuLP
     gurobiOptions : dict(string : <param>)
         optional additional parameters for the Gurobi solver
-    alreadyObserved : None or dict{string: int}
+    alreadyObserved : None or dict{string: float}
         if not None, this is a dictionary containing IDs of science targets
-        and the number of visits they have already been observed
+        and the time in seconds they have already been observed
     forbiddenPairs : None or list(list(tuple of 2 ints))
         Pairs of targets that cannot be both observed during the same visit,
         because this would lead to trajectory collisions
@@ -363,21 +365,27 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
     if blackDotPenalty is not None:
         closestDotsList = getClosestDots(bench)
 
-    nreqvisit = []
-    ndone = []
+    t_required = []
+    t_observed = []
     for t in targets:
         if isinstance(t, ScienceTarget):
-            nreqvisit.append(int(t.obs_time/tvisit))  # FIXME: maybe round up?
+            t_required.append(t.obs_time)
             tmp = 0
             if alreadyObserved is not None:
                 if t.ID in alreadyObserved:
                     tmp = alreadyObserved[t.ID]
-            ndone.append(tmp)
+            t_observed.append(tmp)
         else:
-            nreqvisit.append(0)
-            ndone.append(0)
+            t_required.append(0)
+            t_observed.append(0)
 
     nvisits = len(tpos)
+
+    if not hasattr(tvisit, "__len__"):
+        tvisit = [tvisit]*nvisits
+    if len(tvisit) != nvisits:
+        raise RuntimeError("bad length of nvisits")
+    print(tvisit)
 
     if preassigned is None:
         preassigned = [{}] * nvisits
@@ -439,13 +447,17 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
             TC = tgt.targetclass
             Class = classdict[TC]
             if isinstance(tgt, ScienceTarget):
+                # We skip this if the target is fully observed
+                if t_observed[tidx] >= t_required[tidx]:
+                    continue
+
                 # Target node to target visit node
                 f = prob.addVar(makeName("T_Tv", tgt.ID, ivis), 0, 1)
                 T_o[tidx].append(f)
                 Tv_i[(tidx, ivis)].append(f)
                 if len(T_o[tidx]) == 1:  # freshly created
                     # Science Target class node to target node
-                    tmp = 1 if ndone[tidx] > 0 else 0
+                    tmp = 1 if t_observed[tidx] > 0 else 0
                     f = prob.addVar(makeName("STC_T", TC, tgt.ID), tmp, 1)
                     T_i[tidx].append(f)
                     STC_o[TC].append(f)
@@ -454,10 +466,6 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                         f = prob.addVar(makeName("STC_sink", TC), 0, None)
                         STC_o[TC].append(f)
                         prob.cost += f*Class["nonObservationCost"]
-                    # Science Target node to sink
-                    f = prob.addVar(makeName("ST_sink", tgt.ID), 0, None)
-                    T_o[tidx].append(f)
-                    prob.cost += f*Class["partialObservationCost"]
             elif isinstance(tgt, CalibTarget):
                 # Calibration Target class node to target visit node
                 f = prob.addVar(makeName("CTCv_Tv", TC, tgt.ID, ivis), 0, 1)
@@ -572,14 +580,18 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
         prob.add_constraint(makeName("TvIO", targets[key[0]].ID, key[1]),
                             prob.sum([v for v in ival]+[-v[0] for v in oval]) == 0)
 
-    # inflow and outflow at every T node must be balanced
+    # science targets must be observed for a sufficient amount of time
     for key, ival in T_i.items():
         oval = T_o[key]
-        nvis = nreqvisit[key]-ndone[key]
-        if nvis < 0:
-            nvis = 0
+        t_obs = max(0, t_required[key]-t_observed[key])
+        if (len(ival)!=1):
+            print("should not happen: len(ival) ==",len(ival))
+            raise RuntimeError("oops")
+        ttmp=[]
+        for var in oval:
+            ttmp.append(tvisit[int(var.name.split('_')[-1])])
         prob.add_constraint(makeName("TIO", targets[key].ID),
-                            prob.sum([nvis*v for v in ival]+[-v for v in oval]) == 0)
+            prob.sum([v*ttmp[i] for i,v in enumerate(oval)])>=t_obs*ival[0])
 
     # Science targets must be either observed or go to the sink
     for key, val in STC_o.items():
@@ -601,8 +613,11 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
 
     budgetcount=0
     for key, val in budgetvars.items():
+        ttmp=[]
+        for var in val:
+            ttmp.append(tvisit[int(var.name.split('_')[-1])])
         prob.add_constraint(makeName("budget", str(budgetcount)),
-                            tvisit*prob.sum([v for v in val]) <= 3600.*obsprog_time_budget[key])
+                            prob.sum([v*tv for v, tv in zip(val,ttmp)]) <= 3600.*obsprog_time_budget[key])
         budgetcount += 1
 
     # Make sure that there are enough sky targets in every Cobra location group
