@@ -455,7 +455,7 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
             # check if we need to worry about this target in this stage
             if (tgt.stage != stage) and (tgt.ID not in preassigned[ivis].keys()):
                 continue
-                    
+
             TC = tgt.targetclass
             Class = classdict[TC]
             if isinstance(tgt, ScienceTarget):
@@ -542,6 +542,10 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                 elbowcoll = _get_elbow_collisions(bench, tpos[ivis], vis,
                                                   collision_distance)
                 for (cidx, tidx1), tidx2 in elbowcoll.items():
+           #         print(cidx, tidx1)
+           #         print(len(Tv_o[(tidx1, ivis)]))
+                    if len(Tv_o[(tidx1, ivis)])==0:
+                        continue
                     for f2, cidx2 in Tv_o[(tidx1, ivis)]:
                         if cidx2 == cidx:
                             flow0 = f2
@@ -613,6 +617,7 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
         ttmp=[]
         for var in oval:
             if "sink" in prob.varName(var):
+                print("oopsie")
                 ttmp.append(1e9)
             else:
                 # FIXME: this is extremely ugly
@@ -675,9 +680,12 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
         tgtid2idx[tgt.ID] = idx
     for ivis in range(nvisits):
         for tgtid, cidx in preassigned[ivis].items():
+#            print(tgtid, cidx)
             tidx = tgtid2idx[tgtid]
             varname = makeName("Tv_Cv", tidx, cidx, ivis)
             if varname in prob._vardict:
+#                print("preassign ", tgtid, tidx, cidx, ivis)
+#                exit()
                 prob.add_constraint(makeName("preassign",  tgtid2idx[tgtid], cidx, ivis),
                                     prob._vardict[varname] == 1)
             else:
