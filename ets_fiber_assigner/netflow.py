@@ -369,7 +369,7 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
     ndone = []
     for t in targets:
         if isinstance(t, ScienceTarget):
-            nreqvisit.append(int(t.obs_time/tvisit))  # FIXME: maybe round up?
+            nreqvisit.append(int(np.ceil(t.obs_time/tvisit)))
             tmp = 0
             if alreadyObserved is not None:
                 if t.ID in alreadyObserved:
@@ -437,7 +437,6 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
         for tidx, thing in vis.items():
             if (targets[tidx].stage == stage) or (targets[tidx].ID in preassigned[ivis].keys()):
                 vis2[tidx] = vis[tidx]
-        print("SHRINK: ",len(vis),"->",len(vis2))
         vis = vis2
         del vis2
         for tidx, thing in vis.items():
