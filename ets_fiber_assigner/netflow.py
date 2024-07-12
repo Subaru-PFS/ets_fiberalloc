@@ -203,6 +203,8 @@ class PulpProblem(LPProblem):
             self._prob += i
         self._prob.solve(pulp.COIN_CMD(msg=1, keepFiles=0, maxSeconds=100,
                                        threads=1))
+        if self._prob.status != pulp.constants.LpStatusOptimal:
+            raise RuntimeError("Problem was not solved")
 
     def update(self):
         pass
@@ -430,11 +432,16 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
         print("  exposure {}".format(ivis+1))
         print("Calculating visibilities")
         vis = _get_vis_and_elbow(bench, tpos[ivis])
+        # shrink vis to the part that is active
+        vis2 = defaultdict(list)
+        for tidx, thing in vis.items():
+            if (targets[tidx].stage == stage) or (targets[tidx].ID in preassigned[ivis].keys()):
+                vis2[tidx] = vis[tidx]
+        print("SHRINK: ",len(vis),"->",len(vis2))
+        vis = vis2
+        del vis2
         for tidx, thing in vis.items():
             tgt = targets[tidx]
-            # check if we need to worry about this target in this stage
-            if (tgt.stage != stage) and (tgt.ID not in preassigned[ivis].keys()):
-                continue
                     
             TC = tgt.targetclass
             Class = classdict[TC]
@@ -516,6 +523,9 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                 elbowcoll = _get_elbow_collisions(bench, tpos[ivis], vis,
                                                   collision_distance)
                 for (cidx, tidx1), tidx2 in elbowcoll.items():
+                    # FIXME temporary!
+                    if len(Tv_o[(tidx1, ivis)]) == 0:
+                        raise RuntimeError("must not happen")
                     for f2, cidx2 in Tv_o[(tidx1, ivis)]:
                         if cidx2 == cidx:
                             flow0 = f2
