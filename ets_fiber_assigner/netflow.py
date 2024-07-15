@@ -26,7 +26,12 @@ def _get_colliding_pairs(bench, tpos, vis, dist):
     return pairs
 
 
-def _get_vis_and_elbow(bench, tpos):
+def _get_vis_and_elbow(bench, tpos, active):
+    """Returns a dictionary that contains an entry for each active target
+    in the current visit that can be observed by a least one Cobra.
+    The value for each entry is a list of (cidx, elbowpos), where cidx is
+    the index of a Cobra that can observe the target and elbowpos is the
+    position where this Cobra's elbow would be if it observed this target."""
     from ics.cobraOps.TargetGroup import TargetGroup
     from ics.cobraOps.TargetSelector import TargetSelector
 
@@ -48,7 +53,7 @@ def _get_vis_and_elbow(bench, tpos):
     for cbr in range(tmp.shape[0]):
         #        observable_targets = observable_targets | set(tmp[cbr, :])
         for i, tidx in enumerate(tmp[cbr, :]):
-            if tidx >= 0:
+            if tidx >= 0 and active[tidx]:
                 res[tidx].append((cbr, elb[cbr, i]))
 
 #    nonobservable_targets = set(range(len(tpos))).difference(observable_targets)
@@ -57,6 +62,7 @@ def _get_vis_and_elbow(bench, tpos):
 
 
 def _get_elbow_collisions(bench, tpos, vis, dist):
+# FIXME ivis seems redundant?
     tpos = np.array(tpos)
     ivis = defaultdict(list)
     epos = defaultdict(list)
@@ -192,6 +198,7 @@ class PulpProblem(LPProblem):
         return var
 
     def add_constraint(self, name, constraint):
+        constraint.name=name
         self._constraintdict[name] = constraint
         self._constr.append(constraint)
 
@@ -211,7 +218,7 @@ class PulpProblem(LPProblem):
         self._prob.solve(pulp.COIN_CMD(msg=1, keepFiles=0, timeLimit=100,
                                        threads=1))
         if self._prob.status != pulp.constants.LpStatusOptimal:
-            raise RuntimeException("Problem was not solved")
+            raise RuntimeError("Problem was not solved")
 
     def update(self):
         pass
@@ -449,13 +456,11 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
     for ivis in range(nvisits):
         print("  exposure {}".format(ivis+1))
         print("Calculating visibilities")
-        vis = _get_vis_and_elbow(bench, tpos[ivis])
+        active_targets = [(tgt.stage == stage) or (tgt.ID in preassigned[ivis].keys()) for tgt in targets]
+        vis = _get_vis_and_elbow(bench, tpos[ivis], active_targets)
         for tidx, thing in vis.items():
             tgt = targets[tidx]
-            # check if we need to worry about this target in this stage
-            if (tgt.stage != stage) and (tgt.ID not in preassigned[ivis].keys()):
-                continue
-
+                    
             TC = tgt.targetclass
             Class = classdict[TC]
             if isinstance(tgt, ScienceTarget):
@@ -536,25 +541,22 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                                  Tv_o[(p[0], ivis)] + Tv_o[(p[1], ivis)]]
                         tname0 = targets[p[0]].ID
                         tname1 = targets[p[1]].ID
-                        constr.append([makeName("Coll_", tname0, tname1, ivis),
+                        constr.append([makeName("Coll", tname0, tname1, ivis),
                                        prob.sum(flows) <= 1])
             else:
                 elbowcoll = _get_elbow_collisions(bench, tpos[ivis], vis,
                                                   collision_distance)
                 for (cidx, tidx1), tidx2 in elbowcoll.items():
-           #         print(cidx, tidx1)
-           #         print(len(Tv_o[(tidx1, ivis)]))
-                    if len(Tv_o[(tidx1, ivis)])==0:
-                        continue
-                    for f2, cidx2 in Tv_o[(tidx1, ivis)]:
-                        if cidx2 == cidx:
-                            flow0 = f2
+                    flow0 = [f2 for f2, cidx2 in Tv_o[(tidx1, ivis)] if cidx2 == cidx]
+                    assert len(flow0) == 1
+                    flow0 = flow0[0]
                     for idx2 in tidx2:
-                        if True:  # idx2 != tidx1:
+#                        assert idx2 != tidx1
+                        if idx2 != tidx1: # ?
                             flows = [flow0]
                             flows += [f2 for f2, cidx2 in Tv_o[(idx2, ivis)]
                                       if cidx2 != cidx]
-                            constr.append([makeName("Coll_", cidx, cidx2, ivis),
+                            constr.append([makeName("Elbow", cidx, tidx1, idx2, ivis),
                                            prob.sum(flows) <= 1])
 
         # add constraints for forbidden pairs of targets
@@ -617,14 +619,15 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
         ttmp=[]
         for var in oval:
             if "sink" in prob.varName(var):
-                print("oopsie")
                 ttmp.append(1e9)
             else:
                 # FIXME: this is extremely ugly
                 ivisit = int(prob.varName(var).split('_')[-1])
                 ttmp.append(tvisit[ivisit])
-        prob.add_constraint(makeName("TIO", targets[key].ID),
+        prob.add_constraint(makeName("obstime", targets[key].ID),
             prob.sum([v*t for v,t in zip(oval, ttmp)])>=t_obs*ival[0])
+        prob.add_constraint(makeName("partobs", targets[key].ID),
+            ival[0] >= 1./(nvisits+1)*prob.sum([v for v in oval]))
 
     # Science targets must be either observed or go to the sink
     for key, val in STC_o.items():
