@@ -26,7 +26,7 @@ def _get_colliding_pairs(bench, tpos, vis, dist):
     return pairs
 
 
-def _get_vis_and_elbow(bench, tpos, active):
+def _get_vis_and_elbow(bench, target, tpos, stage, preassigned_tgts, t_observed, t_required):
     """Returns a dictionary that contains an entry for each active target
     in the current visit that can be observed by a least one Cobra.
     The value for each entry is a list of (cidx, elbowpos), where cidx is
@@ -53,7 +53,9 @@ def _get_vis_and_elbow(bench, tpos, active):
     for cbr in range(tmp.shape[0]):
         #        observable_targets = observable_targets | set(tmp[cbr, :])
         for i, tidx in enumerate(tmp[cbr, :]):
-            if tidx >= 0 and active[tidx]:
+            if ((tidx >= 0) and
+                    (t_observed[tidx]< t_required[tidx]) and
+                    (target[tidx].stage==stage or target[tidx].ID in preassigned_tgts)):
                 res[tidx].append((cbr, elb[cbr, i]))
 
 #    nonobservable_targets = set(range(len(tpos))).difference(observable_targets)
@@ -383,8 +385,7 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
     if blackDotPenalty is not None:
         closestDotsList = getClosestDots(bench)
 
-    t_required = []
-    t_observed = []
+    t_required, t_observed = [], []
     for t in targets:
         if isinstance(t, ScienceTarget):
             t_required.append(t.obs_time)
@@ -393,8 +394,8 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                 if t.ID in alreadyObserved:
                     tmp = alreadyObserved[t.ID]
             t_observed.append(tmp)
-        else:
-            t_required.append(0)
+        else:  # calib target, can never be omitted
+            t_required.append(1)
             t_observed.append(0)
 
     nvisits = len(tpos)
@@ -407,7 +408,7 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
         raise RuntimeError("bad length of nvisits")
 
     if preassigned is None:
-        preassigned = [{}] * nvisits
+        preassigned = [{} for _ in range(nvisits)]
 
     # sanity check for science targets: make sure that partialObservationCost
     # is larger than nonObservationCost
@@ -439,7 +440,7 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                 regionVars[i][j].append(f)
 
     if vis_cost is None:
-        vis_cost = [0.] * nvisits
+        vis_cost = [0. for _ in range(nvisits)]
 
     # define LP variables
 
@@ -456,18 +457,13 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
     for ivis in range(nvisits):
         print("  exposure {}".format(ivis+1))
         print("Calculating visibilities")
-        active_targets = [(tgt.stage == stage) or (tgt.ID in preassigned[ivis].keys()) for tgt in targets]
-        vis = _get_vis_and_elbow(bench, tpos[ivis], active_targets)
+        vis = _get_vis_and_elbow(bench, targets, tpos[ivis], stage, preassigned[ivis].keys(),t_observed, t_required)
         for tidx, thing in vis.items():
             tgt = targets[tidx]
                     
             TC = tgt.targetclass
             Class = classdict[TC]
             if isinstance(tgt, ScienceTarget):
-                # We skip this if the target has already been fully observed
-                if t_observed[tidx] >= t_required[tidx]:
-                    continue
-
                 # Target node to target visit node
                 f = prob.addVar(makeName("T_Tv", tgt.ID, ivis), 0, 1)
                 T_o[tidx].append(f)
@@ -626,6 +622,7 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                 ttmp.append(tvisit[ivisit])
         prob.add_constraint(makeName("obstime", targets[key].ID),
             prob.sum([v*t for v,t in zip(oval, ttmp)])>=t_obs*ival[0])
+        # if the target is observed, we must make sure there is inflow.
         prob.add_constraint(makeName("partobs", targets[key].ID),
             ival[0] >= 1./(nvisits+1)*prob.sum([v for v in oval]))
 
