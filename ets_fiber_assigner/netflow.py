@@ -155,7 +155,7 @@ class GurobiProblem(LPProblem):
     def solve(self):
         self._prob.setObjective(self.cost)
         self._prob.optimize()
-# FIXME: I'm not sure if this works; needs to be tested on a machine where Gurobi is instlled
+# FIXME: I'm not sure if this works; needs to be tested on a machine where Gurobi is installed
 #        if self._prob.Status != gbp.OPTIMAL:
 #            raise RuntimeException("Problem was not solved")
 
@@ -175,10 +175,6 @@ class GurobiProblem(LPProblem):
             var.lb = lower
         if upper is not None:
             var.ub = upper
-
-    @staticmethod
-    def varName(var):
-        return var.VarName
 
 
 class PulpProblem(LPProblem):
@@ -238,10 +234,6 @@ class PulpProblem(LPProblem):
             var.lowBound = lower
         if upper is not None:
             var.upBound = upper
-
-    @staticmethod
-    def varName(var):
-        return var.name
 
 
 def makeName(*stuff):
@@ -373,6 +365,7 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
     Tv_o = defaultdict(list)  # Target visit outflows
     Tv_i = defaultdict(list)  # Target visit inflows
     T_o = defaultdict(list)  # Target outflows (only science targets)
+    T_o_duration = defaultdict(list)  # observation durations for target outflows (only science targets)
     T_i = defaultdict(list)  # Target inflows (only science targets)
     CTCv_o = defaultdict(list)  # Calibration Target class visit outflows
     STC_o = defaultdict(list)  # Science Target outflows
@@ -467,6 +460,7 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                 # Target node to target visit node
                 f = prob.addVar(makeName("T_Tv", tgt.ID, ivis), 0, 1)
                 T_o[tidx].append(f)
+                T_o_duration[tidx].append(tvisit[ivis])
                 Tv_i[(tidx, ivis)].append(f)
                 if len(T_o[tidx]) == 1:  # freshly created
                     # Science Target class node to target node
@@ -484,6 +478,7 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                     # Science Target node to sink
                     f = prob.addVar(makeName("ST_sink", tgt.ID), 0, 1)
                     T_o[tidx].append(f)
+                    T_o_duration[tidx].append(1e9)
                     prob.cost += f*Class["partialObservationCost"]
             elif isinstance(tgt, CalibTarget):
                 # Calibration Target class node to target visit node
@@ -606,22 +601,15 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
     # but that will trigger the partial observation penalty.
     for key, ival in T_i.items():
         oval = T_o[key]
+        durations = T_o_duration[key]
         t_obs = max(0, t_required[key]-t_observed[key])
         # Just a sanity check, can probably go away
         if (len(ival)!=1):
             print("should not happen: len(ival) ==",len(ival))
             raise RuntimeError("oops")
         # Get the observation times for the visits when the target can be observed
-        ttmp=[]
-        for var in oval:
-            if "sink" in prob.varName(var):
-                ttmp.append(1e9)
-            else:
-                # FIXME: this is extremely ugly
-                ivisit = int(prob.varName(var).split('_')[-1])
-                ttmp.append(tvisit[ivisit])
         prob.add_constraint(makeName("obstime", targets[key].ID),
-            prob.sum([v*t for v,t in zip(oval, ttmp)])>=t_obs*ival[0])
+            prob.sum([v*t for v,t in zip(oval, durations)])>=t_obs*ival[0])
         # if the target is observed, we must make sure there is inflow.
         prob.add_constraint(makeName("partobs", targets[key].ID),
             ival[0] >= 1./(nvisits+1)*prob.sum([v for v in oval]))
@@ -646,6 +634,7 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
 
     budgetcount=0
     for key, val in budgetvars.items():
+#FIXME!
         ttmp = [tvisit[int(prob.varName(var).split('_')[-1])] for var in val]
         prob.add_constraint(makeName("budget", str(budgetcount)),
                             prob.sum([v*tv for v, tv in zip(val,ttmp)]) <= 3600.*obsprog_time_budget[key])
@@ -680,12 +669,9 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
         tgtid2idx[tgt.ID] = idx
     for ivis in range(nvisits):
         for tgtid, cidx in preassigned[ivis].items():
-#            print(tgtid, cidx)
             tidx = tgtid2idx[tgtid]
             varname = makeName("Tv_Cv", tidx, cidx, ivis)
             if varname in prob._vardict:
-#                print("preassign ", tgtid, tidx, cidx, ivis)
-#                exit()
                 prob.add_constraint(makeName("preassign",  tgtid2idx[tgtid], cidx, ivis),
                                     prob._vardict[varname] == 1)
             else:
