@@ -342,7 +342,7 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
         each unallocated fiber will increase the cost of the solution by this
         amount. This tries to ensure that as many fibers as possible are
         observing something, even if it is, for example, surplus sky targets.
-    obsprog_time_budget : dict (tuple of science target classes: float)
+    obsprog_time_budget : dict (tuple of science target class names: float)
         If there are time budgets for any observation program, they can be
         enforced with this parameter. They key of each entry is a tuple of
         science target class names that fall under the budget, the value is the
@@ -369,6 +369,7 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
     T_i = defaultdict(list)  # Target inflows (only science targets)
     CTCv_o = defaultdict(list)  # Calibration Target class visit outflows
     STC_o = defaultdict(list)  # Science Target outflows
+    timebudgets = {}
 
     if gurobi:
         prob = GurobiProblem(extraOptions=gurobiOptions)
@@ -462,6 +463,11 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                 T_o[tidx].append(f)
                 T_o_duration[tidx].append(tvisit[ivis])
                 Tv_i[(tidx, ivis)].append(f)
+                if tgt.targetclass in timebudgets:
+                    timebudgets[tgt.targetclass] += tvisit[ivis]*f
+                else:
+                    timebudgets[tgt.targetclass] = tvisit[ivis]*f
+
                 if len(T_o[tidx]) == 1:  # freshly created
                     # Science Target class node to target node
                     # If the target has been partially observed before,
@@ -624,20 +630,10 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
 
     # Science targets inside a given program must not get more observation time
     # than allowed by the time budget
-    budgetvars = defaultdict(list)
-    for key, val in Tv_i.items():
-        tidx = key[0]
-        tgt = targets[tidx]
-        for classes, budget in obsprog_time_budget.items():
-            if tgt.targetclass in classes:
-                budgetvars[classes].append(val[0]) 
-
     budgetcount=0
-    for key, val in budgetvars.items():
-#FIXME!
-        ttmp = [tvisit[int(prob.varName(var).split('_')[-1])] for var in val]
+    for classes, total_hours in obsprog_time_budget.items():
         prob.add_constraint(makeName("budget", str(budgetcount)),
-                            prob.sum([v*tv for v, tv in zip(val,ttmp)]) <= 3600.*obsprog_time_budget[key])
+                            prob.sum([timebudgets[tc] for tc in classes if tc in timebudgets]) <= 3600.*total_hours)
         budgetcount += 1
 
     # Make sure that there are enough sky targets in every Cobra location group
