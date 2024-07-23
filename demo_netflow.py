@@ -73,12 +73,12 @@ classdict["cal"] = {"numRequired": 40,
 
 # optional: slightly increase the cost for later observations,
 # to observe as early as possible
-vis_cost = [i*10. for i in range(nvisit)]
+vis_cost = [i*0. for i in range(nvisit)]
 
 
 # optional: penalize assignments where the cobra has to move far out
 def cobraMoveCost(dist):
-    return 0.1*dist
+    return 0.*dist
 
 
 # duration of one observation in seconds
@@ -90,10 +90,10 @@ gurobiOptions = dict(seed=0, presolve=1, method=4, degenmoves=0,
 # let's pretend that most targets have already been completely observed,
 # and that the rest has been partially observed
 alreadyObserved={}
-for t in tgt:
-    alreadyObserved[t.ID] = 3
-for t in tgt[::10]:
-    alreadyObserved[t.ID] = 1
+#for t in tgt:
+#    alreadyObserved[t.ID] = 3*t_obs
+#for t in tgt[::10]:
+#    alreadyObserved[t.ID] = 1*t_obs
 
 forbiddenPairs = []
 for i in range(nvisit):
