@@ -17,14 +17,18 @@ fscience_targets = catalog_path+"pfs_preliminary_target_cosmology.dat"
 # So far, we only have test data for targets.
 # Once we have files for calibration stars and sky locations, we can add them
 # here.
-fcal_stars = catalog_path+"pfs_preliminary_target_cosmology_fcstars.dat"
-fsky_pos = catalog_path+"pfs_preliminary_target_cosmology_sky.dat"
+#fcal_stars = catalog_path+"pfs_preliminary_target_cosmology_fcstars.dat"
+#fsky_pos = catalog_path+"pfs_preliminary_target_cosmology_sky.dat"
 
 # read all targets into a single list, giving them their proper types
 tgt = nf.readScientificFromFile(fscience_targets, "sci")
+# move some science targets to the second stage
+for x in tgt[::4]:
+    x.stage=1
+
 # add calibration targets
-tgt += nf.readCalibrationFromFile(fcal_stars, "cal")
-tgt += nf.readCalibrationFromFile(fsky_pos, "sky")
+#tgt += nf.readCalibrationFromFile(fcal_stars, "cal")
+#tgt += nf.readCalibrationFromFile(fsky_pos, "sky")
 
 # get a complete, idealized focal plane configuration
 bench = Bench(layout="full")
@@ -39,7 +43,7 @@ otime = "2016-04-03T08:00:00Z"
 telescopes = []
 
 # number of distinct observations
-nvisit = 6
+nvisit = 2
 
 # generate randomly jittered telescope pointings for every observation
 for _ in range(nvisit):
@@ -71,46 +75,25 @@ classdict["sky"] = {"numRequired": 240,
 classdict["cal"] = {"numRequired": 40,
                     "nonObservationCost": 1e6, "calib": True}
 
-# optional: slightly increase the cost for later observations,
-# to observe as early as possible
-vis_cost = [i*0. for i in range(nvisit)]
+# durations of the individual observations in seconds
+t_obs = [150, 750]
 
-
-# optional: penalize assignments where the cobra has to move far out
-def cobraMoveCost(dist):
-    return 0.*dist
-
-
-# duration of one observation in seconds
-t_obs = 300.
+time_budget={("sci_P1",): 10.}
 
 gurobiOptions = dict(seed=0, presolve=1, method=4, degenmoves=0,
                      heuristics=0.8, mipfocus=0, mipgap=1.0e-04)
 
-# let's pretend that most targets have already been completely observed,
-# and that the rest has been partially observed
-alreadyObserved={}
-#for t in tgt:
-#    alreadyObserved[t.ID] = 3*t_obs
-#for t in tgt[::10]:
-#    alreadyObserved[t.ID] = 1*t_obs
 
-forbiddenPairs = []
-for i in range(nvisit):
-    forbiddenPairs.append([])
+forbiddenPairs = [[] for _ in range(nvisit)]
 
+# first stage
 done = False
 while not done:
     # compute observation strategy
     prob = nf.buildProblem(bench, tgt, tpos, classdict, t_obs,
-                           vis_cost, cobraMoveCost=cobraMoveCost,
                            collision_distance=2., elbow_collisions=True,
                            gurobi=False, gurobiOptions=gurobiOptions,
-                           alreadyObserved=alreadyObserved,
-                           forbiddenPairs=forbiddenPairs)
-
-    # print("writing problem to file ", mpsName)
-    # prob.dump(mpsName)
+                           forbiddenPairs=forbiddenPairs,obsprog_time_budget=time_budget)
 
     print("solving the problem")
     prob.solve()
@@ -153,42 +136,93 @@ while not done:
     print("trajectory collisions found:", ncoll)
     done = ncoll == 0
 
-# write output file
-with open("output.txt", "w") as f:
-    for i, (vis, tp, tel) in enumerate(zip(res, tpos, telescopes)):
-        print("exposure {}:".format(i))
-        print("  assigned Cobras: {}".format(len(vis)))
-        tdict = defaultdict(int)
-        f.write("# Exposure {}: duration {}s, RA: {}, Dec: {}, PA: {}\n".
-                format(i+1, t_obs, tel._ra, tel._dec, tel._posang))
-        f.write("# Target    Fiber          X          Y         "
-                "RA        DEC\n")
-        for tidx, cidx in vis.items():
-            tdict[tgt[tidx].targetclass] += 1
-            f.write("{:} {:6d} {:10.5f} {:10.5f} {:10.5f} {:10.5f}\n"
-                    .format(tgt[tidx].ID, cidx+1, tp[tidx].real, tp[tidx].imag,
-                            tgt[tidx].ra, tgt[tidx].dec))
-        for cls, num in tdict.items():
-            print("   {}: {}".format(cls, num))
-
-for vis, tp in zip(res, tpos):
-    selectedTargets = np.full(len(bench.cobras.centers), NULL_TARGET_POSITION)
-    ids = np.full(len(bench.cobras.centers), NULL_TARGET_ID)
+for i, (vis, tp, tel) in enumerate(zip(res, tpos, telescopes)):
+    print("exposure {}:".format(i+1))
+    print("  assigned Cobras: {}".format(len(vis)))
+    tdict = defaultdict(int)
     for tidx, cidx in vis.items():
-        selectedTargets[cidx] = tp[tidx]
-        ids[cidx] = ""
-    for i in range(selectedTargets.size):
-        if selectedTargets[i] != NULL_TARGET_POSITION:
-            dist = np.abs(selectedTargets[i]-bench.cobras.centers[i])
+        tdict[tgt[tidx].targetclass] += 1
+    for cls, num in tdict.items():
+        print("   {}: {}".format(cls, num))
 
-    simulator = CollisionSimulator(bench, TargetGroup(selectedTargets, ids))
-    simulator.run()
-    simulator.plotResults(paintFootprints=False)
-    plotUtils.pauseExecution()
+# Write the problem into a file for analysis
+#prob.dump("dump0")
 
-    # Animate the trajectory collisions
-    (problematicCobras,) = np.where(np.logical_and(
-        simulator.collisions, ~simulator.endPointCollisions))
-    for cbr in problematicCobras:
-        simulator.animateCobraTrajectory(cbr)
-        plotUtils.pauseExecution()
+# create the list of preassigned cobras/targets
+preassigned_list = [{} for _ in range(nvisit)] #list (dict(TargetID: Cobra index))
+for i, vis in enumerate(res):
+    for tidx, cidx in vis.items():
+        if tgt[tidx].stage != 0:
+            print("Should not happen")
+        preassigned_list[i][tgt[tidx].ID] = cidx
+
+
+
+# second stage
+
+# reset forbidden pairs list
+forbiddenPairs = []
+for i in range(nvisit):
+    forbiddenPairs.append([])
+
+done = False
+while not done:
+    # compute observation strategy, now with preassigned list and stage=1
+    prob = nf.buildProblem(bench, tgt, tpos, classdict, t_obs,
+                           collision_distance=2., elbow_collisions=True,
+                           gurobi=False, gurobiOptions=gurobiOptions,
+                           forbiddenPairs=forbiddenPairs, stage=1, preassigned=preassigned_list)
+
+    print("solving the problem")
+    prob.solve()
+    prob.dump("dump")
+
+    # extract solution
+    res = [{} for _ in range(nvisit)]
+    for k1, v1 in prob._vardict.items():
+        if k1.startswith("Tv_Cv_"):
+            visited = prob.value(v1) > 0
+            if visited:
+                _, _, tidx, cidx, ivis = k1.split("_")
+                res[int(ivis)][int(tidx)] = int(cidx)
+
+    print("Checking for trajectory collisions")
+    ncoll = 0
+    for ivis, (vis, tp) in enumerate(zip(res, tpos)):
+        print("exposure {}:".format(ivis+1))
+        print("  assigned Cobras: {}".format(len(vis)))
+        selectedTargets = np.full(len(bench.cobras.centers), NULL_TARGET_POSITION)
+        ids = np.full(len(bench.cobras.centers), NULL_TARGET_ID)
+        for tidx, cidx in vis.items():
+            selectedTargets[cidx] = tp[tidx]
+            ids[cidx] = ""
+        for i in range(selectedTargets.size):
+            if selectedTargets[i] != NULL_TARGET_POSITION:
+                dist = np.abs(selectedTargets[i]-bench.cobras.centers[i])
+
+        simulator = CollisionSimulator(bench, TargetGroup(selectedTargets, ids))
+        simulator.run()
+        if np.any(simulator.endPointCollisions):
+            print("ERROR: detected end point collision, which should be impossible", np.sum(simulator.endPointCollisions))
+        coll_tidx = []
+        for tidx, cidx in vis.items():
+            if simulator.collisions[cidx]:
+                coll_tidx.append(tidx)
+        ncoll += len(coll_tidx)
+        for i1 in range(0,len(coll_tidx)):
+            for i2 in range(i1+1,len(coll_tidx)):
+                if np.abs(tp[coll_tidx[i1]]-tp[coll_tidx[i2]])<10:
+                    forbiddenPairs[ivis].append((coll_tidx[i1],coll_tidx[i2]))
+
+    print("trajectory collisions found:", ncoll)
+    done = ncoll == 0
+
+for i, (vis, tp, tel) in enumerate(zip(res, tpos, telescopes)):
+    print("exposure {}:".format(i+1))
+    print("  assigned Cobras: {}".format(len(vis)))
+    tdict = defaultdict(int)
+    for tidx, cidx in vis.items():
+        tdict[tgt[tidx].targetclass] += 1
+    for cls, num in tdict.items():
+        print("   {}: {}".format(cls, num))
+
