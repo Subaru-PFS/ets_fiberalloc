@@ -2,8 +2,17 @@ from setuptools import setup, Extension, find_packages
 from setuptools.command.build_ext import build_ext
 import sys
 import setuptools
+import subprocess
 
-__version__ = "0.0.1"
+__version__ = "2.0"
+
+try:
+    tmp = subprocess.run(["git", "describe", "--dirty"], capture_output=True, text=True)
+    gitversion = tmp.stdout
+except:
+    gitversion = "unknown.gitversion"
+
+__version__ = __version__ + "+" + gitversion
 
 class get_pybind_include(object):
     """Helper class to determine the pybind11 include path
