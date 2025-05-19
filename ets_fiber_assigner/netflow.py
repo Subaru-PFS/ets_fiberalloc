@@ -252,7 +252,10 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                  fiberNonAllocationCost=0.,
                  obsprog_time_budget={},
                  stage=0,
-                 preassigned=None):
+                 preassigned=None,
+                 cobraCalLocationGroup=None,
+                 calLocationGroupPenalty=None,
+                 minCalTargetsPerLocation=None):
     """Build the ILP problem for a given observation task
 
     Parameters
@@ -433,6 +436,16 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                 prob.cost += f*instrumentRegionPenalty
                 regionVars[i][j].append(f)
 
+    if cobraCalLocationGroup is not None:
+        maxCalLocGroup = max(cobraCalLocationGroup)
+        calLocationVars = [[[] for _ in range(maxCalLocGroup+1)] for _ in range(nvisits)]
+        # add overflow arcs.
+        for i in range(nvisits):
+            for j in range(maxCalLocGroup+1):
+                f = prob.addVar(makeName("callocgroup_sink", i, j), 0, None)
+                prob.cost += f*calLocationGroupPenalty
+                calLocationVars[i][j].append(f)
+
     if vis_cost is None:
         vis_cost = [0. for _ in range(nvisits)]
 
@@ -506,6 +519,10 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                         and isinstance(tgt, CalibTarget) \
                         and tgt.targetclass == "sky":
                     regionVars[ivis][cobraInstrumentRegion[cidx]].append(f)
+                if cobraCalLocationGroup is not None \
+                        and isinstance(tgt, CalibTarget) \
+                        and tgt.targetclass == "cal":
+                    calLocationVars[ivis][cobraCalLocationGroup[cidx]].append(f)
                 tcost = vis_cost[ivis]
                 if cobraMoveCost is not None:
                     dist = np.abs(bench.cobras.centers[cidx]-tpos[ivis][tidx])
@@ -649,6 +666,13 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
             for i in range(maxInstRegion+1):
                 prob.add_constraint(makeName("InstReg", ivis, i),
                                     prob.sum([v for v in regionVars[ivis][i]]) >= minSkyTargetsPerInstrumentRegion)
+
+    # Make sure that there are enough calibration targets in every Cobra calibration location group
+    if cobraCalLocationGroup is not None:
+        for ivis in range(nvisits):
+            for i in range(maxCalLocGroup+1):
+                prob.add_constraint(makeName("CalLocGrp", ivis, i),
+                                    prob.sum([v for v in calLocationVars[ivis][i]]) >= minCalTargetsPerLocation)
 
     # Make sure that enough fibers are kept unassigned, if this was requested
     if numReservedFibers > 0:
