@@ -1,13 +1,64 @@
 import ets_fiber_assigner.netflow as nf
 import numpy as np
-from ics.cobraOps.Bench import Bench
 from ics.cobraOps.TargetGroup import TargetGroup
-from ics.cobraOps.CobrasCalibrationProduct import CobrasCalibrationProduct
-from ics.cobraOps.CollisionSimulator import CollisionSimulator
+from ics.cobraOps.CollisionSimulator2 import CollisionSimulator2
 from ics.cobraOps.cobraConstants import NULL_TARGET_POSITION, NULL_TARGET_ID
 from ics.cobraOps import plotUtils
 from collections import defaultdict
 
+def getBench():
+    import os
+    from ics.cobraOps.Bench import Bench
+    from ics.cobraCharmer.cobraCoach.cobraCoach import CobraCoach
+    from ics.cobraOps.CobrasCalibrationProduct import CobrasCalibrationProduct
+    from ics.cobraOps.BlackDotsCalibrationProduct import BlackDotsCalibrationProduct
+    os.environ["PFS_INSTDATA_DIR"] = "/home/martin/codes/pfs_instdata"
+    cobraCoach = CobraCoach(
+        "fpga", loadModel=False, trajectoryMode=True,
+        rootDir="/home/martin/codes/efa/")
+    cobraCoach.loadModel(version="ALL", moduleVersion=None)
+    
+    # Get the calibration product
+    calibrationProduct = cobraCoach.calibModel
+    
+    # Fix the phi angles for the bad cobras
+    badCobras = calibrationProduct.status != calibrationProduct.COBRA_OK_MASK
+    calibrationProduct.phiIn[badCobras] = -np.pi
+    calibrationProduct.phiOut[badCobras] = 0
+    print("Bad cobras: %i" % np.sum(badCobras))
+    
+    # Use the median value link lengths in those cobras with zero link lengths
+    zeroLinkLengths = np.logical_or(
+        calibrationProduct.L1 == 0, calibrationProduct.L2 == 0)
+    calibrationProduct.L1[zeroLinkLengths] = np.median(
+        calibrationProduct.L1[~zeroLinkLengths])
+    calibrationProduct.L2[zeroLinkLengths] = np.median(
+        calibrationProduct.L2[~zeroLinkLengths])
+    print("Cobras with zero link lenghts: %i" % np.sum(zeroLinkLengths))
+    
+    # Use the median value link lengths in those cobras with too long link lengths
+    tooLongLinkLengths = np.logical_or(
+        calibrationProduct.L1 > 50, calibrationProduct.L2 > 50)
+    calibrationProduct.L1[tooLongLinkLengths] = np.median(
+        calibrationProduct.L1[~tooLongLinkLengths])
+    calibrationProduct.L2[tooLongLinkLengths] = np.median(
+        calibrationProduct.L2[~tooLongLinkLengths])
+    print("Cobras with too long link lenghts: %i" % np.sum(tooLongLinkLengths))
+    
+    # Move the bad cobras to a position where they cannot collide with the good cobras
+    calibrationProduct.centers[badCobras] += 500
+    
+    # Load the black dots calibration file
+    calibrationFileName = os.path.join(
+        os.environ["PFS_INSTDATA_DIR"],"data/pfi/dot", "black_dots_mm.csv")
+    blackDotsCalibrationProduct = BlackDotsCalibrationProduct(calibrationFileName)
+    
+    # Create the bench instance
+    bench = Bench(layout="calibration", calibrationProduct=calibrationProduct,
+                  blackDotsCalibrationProduct=blackDotsCalibrationProduct)
+    print("Number of cobras:", bench.cobras.nCobras)
+    return cobraCoach, bench
+   
 # make runs reproducible
 np.random.seed(20)
 
@@ -27,7 +78,7 @@ tgt += nf.readCalibrationFromFile(fcal_stars, "cal")
 tgt += nf.readCalibrationFromFile(fsky_pos, "sky")
 
 # get a complete, idealized focal plane configuration
-bench = Bench(layout="full")
+cobraCoach, bench = getBench()
 # if you have the XML file, you can also generate a more realistic focal plane
 # bench = Bench(calibrationProduct=CobrasCalibrationProduct(
 #     "../ics_cobraOps/python/ics/demos/updatedMaps6.xml"))
@@ -39,7 +90,7 @@ otime = "2016-04-03T08:00:00Z"
 telescopes = []
 
 # number of distinct observations
-nvisit = 6
+nvisit = 2
 
 # generate randomly jittered telescope pointings for every observation
 for _ in range(nvisit):
@@ -82,7 +133,7 @@ def cobraMoveCost(dist):
 
 
 # duration of one observation in seconds
-t_obs = 300.
+t_obs = 900.
 
 gurobiOptions = dict(seed=0, presolve=1, method=4, degenmoves=0,
                      heuristics=0.8, mipfocus=0, mipgap=1.0e-04)
@@ -136,7 +187,7 @@ while not done:
             if selectedTargets[i] != NULL_TARGET_POSITION:
                 dist = np.abs(selectedTargets[i]-bench.cobras.centers[i])
 
-        simulator = CollisionSimulator(bench, TargetGroup(selectedTargets, ids))
+        simulator = CollisionSimulator2(bench, cobraCoach, TargetGroup(selectedTargets, ids))
         simulator.run()
         if np.any(simulator.endPointCollisions):
             print("ERROR: detected end point collision, which should be impossible")
@@ -181,7 +232,7 @@ for vis, tp in zip(res, tpos):
         if selectedTargets[i] != NULL_TARGET_POSITION:
             dist = np.abs(selectedTargets[i]-bench.cobras.centers[i])
 
-    simulator = CollisionSimulator(bench, TargetGroup(selectedTargets, ids))
+    simulator = CollisionSimulator2(bench, cobraCoach, TargetGroup(selectedTargets, ids))
     simulator.run()
     simulator.plotResults(paintFootprints=False)
     plotUtils.pauseExecution()

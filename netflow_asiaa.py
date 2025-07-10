@@ -4,41 +4,31 @@ from collections import defaultdict
 import ets_fiber_assigner.netflow as nf
 import ets_fiber_assigner.io_helpers
 
-from ics.cobraOps.Bench import Bench
 from ics.cobraOps.TargetGroup import TargetGroup
-from ics.cobraOps.CobrasCalibrationProduct import CobrasCalibrationProduct
 from ics.cobraOps.CollisionSimulator2 import CollisionSimulator2
-from procedures.moduleTest.cobraCoach import CobraCoach
 from ics.cobraOps.cobraConstants import NULL_TARGET_POSITION, NULL_TARGET_ID
 from ics.cobraOps import plotUtils
 
-
 def getBench():
     import os
-    from procedures.moduleTest.cobraCoach import CobraCoach
+    from ics.cobraOps.Bench import Bench
+    from ics.cobraCharmer.cobraCoach.cobraCoach import CobraCoach
+    from ics.cobraOps.CobrasCalibrationProduct import CobrasCalibrationProduct
+    from ics.cobraOps.BlackDotsCalibrationProduct import BlackDotsCalibrationProduct
     os.environ["PFS_INSTDATA_DIR"] = "/home/martin/codes/pfs_instdata"
     cobraCoach = CobraCoach(
         "fpga", loadModel=False, trajectoryMode=True,
         rootDir="/home/martin/codes/efa/")
-    cobraCoach.loadModel(version="ALL", moduleVersion="final_20210512")
+    cobraCoach.loadModel(version="ALL", moduleVersion=None)
     
     # Get the calibration product
     calibrationProduct = cobraCoach.calibModel
     
-    # Set some dummy center positions and phi angles for those cobras that have
-    # zero centers
-    zeroCenters = calibrationProduct.centers == 0
-    calibrationProduct.centers[zeroCenters] = np.arange(np.sum(zeroCenters)) * 300j
-    calibrationProduct.phiIn[zeroCenters] = -np.pi
-    calibrationProduct.phiOut[zeroCenters] = 0
-    print("Cobras with zero centers: %i" % np.sum(zeroCenters))
-    
-    # Transform the calibration product cobra centers and link lengths units from
-    # pixels to millimeters
-    calibrationProduct.centers -= 5048.0 + 3597.0j
-    calibrationProduct.centers *= np.exp(1j * np.deg2rad(1.0)) / 13.02
-    calibrationProduct.L1 /= 13.02
-    calibrationProduct.L2 /= 13.02
+    # Fix the phi angles for the bad cobras
+    badCobras = calibrationProduct.status != calibrationProduct.COBRA_OK_MASK
+    calibrationProduct.phiIn[badCobras] = -np.pi
+    calibrationProduct.phiOut[badCobras] = 0
+    print("Bad cobras: %i" % np.sum(badCobras))
     
     # Use the median value link lengths in those cobras with zero link lengths
     zeroLinkLengths = np.logical_or(
@@ -51,19 +41,26 @@ def getBench():
     
     # Use the median value link lengths in those cobras with too long link lengths
     tooLongLinkLengths = np.logical_or(
-        calibrationProduct.L1 > 100, calibrationProduct.L2 > 100)
+        calibrationProduct.L1 > 50, calibrationProduct.L2 > 50)
     calibrationProduct.L1[tooLongLinkLengths] = np.median(
         calibrationProduct.L1[~tooLongLinkLengths])
     calibrationProduct.L2[tooLongLinkLengths] = np.median(
         calibrationProduct.L2[~tooLongLinkLengths])
     print("Cobras with too long link lenghts: %i" % np.sum(tooLongLinkLengths))
-   
+    
+    # Move the bad cobras to a position where they cannot collide with the good cobras
+    calibrationProduct.centers[badCobras] += 500
+    
+    # Load the black dots calibration file
+    calibrationFileName = os.path.join(
+        os.environ["PFS_INSTDATA_DIR"],"data/pfi/dot", "black_dots_mm.csv")
+    blackDotsCalibrationProduct = BlackDotsCalibrationProduct(calibrationFileName)
+    
     # Create the bench instance
-    bench = Bench(layout="calibration", calibrationProduct=calibrationProduct)
+    bench = Bench(layout="calibration", calibrationProduct=calibrationProduct,
+                  blackDotsCalibrationProduct=blackDotsCalibrationProduct)
     print("Number of cobras:", bench.cobras.nCobras)
-
     return cobraCoach, bench
-
 
 # make runs reproducible
 np.random.seed(20)
