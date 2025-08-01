@@ -33,18 +33,11 @@ def _get_vis_and_elbow(bench, target, tpos, stage, preassigned_tgts, t_observed,
     the index of a Cobra that can observe the target and elbowpos is the
     position where this Cobra's elbow would be if it observed this target."""
     from ics.cobraOps.TargetGroup import TargetGroup
-    from ics.cobraOps.TargetSelector import TargetSelector
-
-    class DummyTargetSelector(TargetSelector):
-        def run(self):
-            return
-
-        def selectTargets(self):
-            return
+    from ics.cobraOps.RandomTargetSelector import RandomTargetSelector
 
     tgroup = TargetGroup(np.array(tpos))
-    tselect = DummyTargetSelector(bench, tgroup)
-    tselect.calculateAccessibleTargets()
+    tselect = RandomTargetSelector(bench, tgroup)
+    tselect.calculateAccessibleTargets(safetyMargin=0)
     tmp = tselect.accessibleTargetIndices
     elb = tselect.accessibleTargetElbows
     res = defaultdict(list)
@@ -65,6 +58,8 @@ def _get_vis_and_elbow(bench, target, tpos, stage, preassigned_tgts, t_observed,
 
 def _get_elbow_collisions(bench, tpos, vis, dist):
 # FIXME ivis seems redundant?
+    from ics.cobraOps.CollisionSimulator import CollisionSimulator
+
     tpos = np.array(tpos)
     ivis = defaultdict(list)
     epos = defaultdict(list)
@@ -88,7 +83,7 @@ def _get_elbow_collisions(bench, tpos, vis, dist):
                 ebp = np.full(len(i2), elbowpos)
                 tp = np.full(len(i2), tpos[tidx])
                 ti2 = tpos[i2]
-                d = bench.distancesToLineSegments(ti2, tp, ebp)
+                d = CollisionSimulator.distancesToLineSegments(ti2, tp, ebp)
                 res[(cidx, tidx)] += list(i2[d < dist])
     return res
 

@@ -32,9 +32,7 @@ from ets_shuffle.convenience import flag_close_pairs
 from ets_shuffle.convenience import guidecam_geometry
 from ics.cobraOps.Bench import Bench
 from ics.cobraOps.BlackDotsCalibrationProduct import BlackDotsCalibrationProduct
-from ics.cobraOps.cobraConstants import NULL_TARGET_ID
-from ics.cobraOps.cobraConstants import NULL_TARGET_POSITION
-from ics.cobraOps.CollisionSimulator2 import CollisionSimulator2
+from ics.cobraOps.CollisionSimulator import CollisionSimulator
 from ics.cobraOps.TargetGroup import TargetGroup
 from pfs.utils.coordinates.CoordTransp import CoordinateTransform as ctrans
 from pfs.utils.coordinates.CoordTransp import ag_pfimm_to_pixel
@@ -49,46 +47,29 @@ def getBench(args):
 
     os.environ["PFS_INSTDATA_DIR"] = args.pfs_instdata_dir
     cobraCoach = CobraCoach(
-        "fpga", loadModel=False, trajectoryMode=True, rootDir=args.cobra_coach_dir
+        loadModel=True, trajectoryMode=True, rootDir=args.cobra_coach_dir
     )
-
-    cobraCoach.loadModel(version="ALL", moduleVersion=args.cobra_coach_module_version)
 
     # Get the calibration product
     calibrationProduct = cobraCoach.calibModel
 
-    # Set some dummy center positions and phi angles for those cobras that have
-    # zero centers
-    zeroCenters = calibrationProduct.centers == 0
-    calibrationProduct.centers[zeroCenters] = np.arange(np.sum(zeroCenters)) * 300j
-    calibrationProduct.phiIn[zeroCenters] = -np.pi
-    calibrationProduct.phiOut[zeroCenters] = 0
-    print("Cobras with zero centers: %i" % np.sum(zeroCenters))
+    # Fix the phi and tht angles for some of the cobras
+    wrongAngles = calibrationProduct.phiIn == 0
+    calibrationProduct.phiIn[wrongAngles] = -np.pi
+    calibrationProduct.phiOut[wrongAngles] = 0
+    calibrationProduct.tht0[wrongAngles] = 0
+    calibrationProduct.tht1[wrongAngles] = (2.1 * np.pi) % (2 * np.pi)
+    print(f"Number of cobras with wrong phi and tht angles: {np.sum(wrongAngles)}")
 
-    # Use the median value link lengths in those cobras with zero link lengths
-    zeroLinkLengths = np.logical_or(
-        calibrationProduct.L1 == 0, calibrationProduct.L2 == 0
-    )
-    calibrationProduct.L1[zeroLinkLengths] = np.median(
-        calibrationProduct.L1[~zeroLinkLengths]
-    )
-    calibrationProduct.L2[zeroLinkLengths] = np.median(
-        calibrationProduct.L2[~zeroLinkLengths]
-    )
-    print("Cobras with zero link lenghts: %i" % np.sum(zeroLinkLengths))
+    # Check if there is any cobra with too short or too long link lengths
+    tooShortLinks = np.logical_or(
+        calibrationProduct.L1 < 1, calibrationProduct.L2 < 1)
+    tooLongLinks = np.logical_or(
+        calibrationProduct.L1 > 5, calibrationProduct.L2 > 5)
+    print(f"Number of cobras with too short link lenghts: {np.sum(tooShortLinks)}")
+    print(f"Number of cobras with too long link lenghts: {np.sum(tooLongLinks)}")
 
-    # Use the median value link lengths in those cobras with too long link lengths
-    tooLongLinkLengths = np.logical_or(
-        calibrationProduct.L1 > 100, calibrationProduct.L2 > 100
-    )
-    calibrationProduct.L1[tooLongLinkLengths] = np.median(
-        calibrationProduct.L1[~tooLongLinkLengths]
-    )
-    calibrationProduct.L2[tooLongLinkLengths] = np.median(
-        calibrationProduct.L2[~tooLongLinkLengths]
-    )
-    print("Cobras with too long link lenghts: %i" % np.sum(tooLongLinkLengths))
-
+    # Load the black dots calibration file
     calibrationFileName = os.path.join(
         os.environ["PFS_INSTDATA_DIR"], "data/pfi/dot", "black_dots_mm.csv"
     )
@@ -96,13 +77,11 @@ def getBench(args):
 
     # Create the bench instance
     bench = Bench(
-        layout="calibration",
-        calibrationProduct=calibrationProduct,
-        blackDotsCalibrationProduct=blackDotsCalibrationProduct,
+        cobraCoach, blackDotsCalibrationProduct
     )
     print("Number of cobras:", bench.cobras.nCobras)
 
-    return cobraCoach, bench
+    return bench
 
 
 def get_arguments():
@@ -530,7 +509,7 @@ def gen_assignment(args, listname_targets, listname_fluxstds):
     tgt = nf.readScientificFromFile(listname_targets, "sci")
     tgt += nf.readCalibrationFromFile(listname_fluxstds, "cal")
     # tgt += nf.readCalibrationFromFile(listname_sky, "sky")  # need a list of sky positions, which looks very hard.
-    cobraCoach, bench = getBench(args)
+    bench = getBench(args)
     telescopes = [nf.Telescope(args.ra, args.dec, args.pa, args.observation_time)]
 
     # get focal plane positions for all targets and all visits
@@ -626,17 +605,17 @@ def gen_assignment(args, listname_targets, listname_fluxstds):
         print("Checking for trajectory collisions")
         ncoll = 0
         for ivis, (vis, tp) in enumerate(zip(res, tpos)):
-            selectedTargets = np.full(len(bench.cobras.centers), NULL_TARGET_POSITION)
-            ids = np.full(len(bench.cobras.centers), NULL_TARGET_ID)
+            selectedTargets = np.full(len(bench.cobras.centers), TargetGroup.NULL_TARGET_POSITION)
+            ids = np.full(len(bench.cobras.centers), TargetGroup.NULL_TARGET_ID)
             for tidx, cidx in vis.items():
                 selectedTargets[cidx] = tp[tidx]
                 ids[cidx] = ""
             for i in range(selectedTargets.size):
-                if selectedTargets[i] != NULL_TARGET_POSITION:
+                if selectedTargets[i] != TargetGroup.NULL_TARGET_POSITION:
                     dist = np.abs(selectedTargets[i] - bench.cobras.centers[i])
 
-            simulator = CollisionSimulator2(
-                bench, cobraCoach, TargetGroup(selectedTargets, ids)
+            simulator = CollisionSimulator(
+                bench, TargetGroup(selectedTargets, ids)
             )
             simulator.run()
             # If you want to see the result of the collision simulator, uncomment the next three lines
