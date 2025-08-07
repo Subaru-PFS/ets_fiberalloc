@@ -2,17 +2,8 @@ from setuptools import setup, Extension, find_packages
 from setuptools.command.build_ext import build_ext
 import sys
 import setuptools
-import subprocess
 
-__version__ = "2.1"
-
-try:
-    tmp = subprocess.run(["git", "describe", "--dirty"], capture_output=True, text=True)
-    gitversion = tmp.stdout
-except:
-    gitversion = "unknown.gitversion"
-
-__version__ = __version__ + "+" + gitversion
+from ets_fiber_assigner._version import __version__
 
 class get_pybind_include(object):
     """Helper class to determine the pybind11 include path

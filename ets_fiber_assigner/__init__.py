@@ -1,3 +1,1 @@
-import importlib.metadata
-
-__version__ = importlib.metadata.version("ets_fiber_assigner")
+from ._version import __version__
