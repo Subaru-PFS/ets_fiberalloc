@@ -666,7 +666,7 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                 prob.add_constraint(makeName("preassign",  tgtid2idx[tgtid], cidx, ivis),
                                     prob._vardict[varname] == 1)
             else:
-                raise RuntimeError("inconsistence: could not do preassignment "
+                raise RuntimeError("inconsistency: could not do preassignment "
                                    f"of Cobra {cidx} to target {tgtid}")
 
     return prob

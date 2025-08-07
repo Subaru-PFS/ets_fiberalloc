@@ -61,11 +61,7 @@ tgt = nf.readScientificFromFile(fscience_targets, "sci")
 tgt += nf.readCalibrationFromFile(fcal_stars, "cal")
 tgt += nf.readCalibrationFromFile(fsky_pos, "sky")
 
-# get a complete, idealized focal plane configuration
 bench = getBench()
-# if you have the XML file, you can also generate a more realistic focal plane
-# bench = Bench(calibrationProduct=CobrasCalibrationProduct(
-#     "../ics_cobraOps/python/ics/demos/updatedMaps6.xml"))
 
 # point the telescope at the center of all science targets
 raTel, decTel = nf.telescopeRaDecFromFile(fscience_targets)
@@ -167,14 +163,14 @@ while not done:
         for tidx, cidx in vis.items():
             selectedTargets[cidx] = tp[tidx]
             ids[cidx] = ""
-        for i in range(selectedTargets.size):
-            if selectedTargets[i] != TargetGroup.NULL_TARGET_POSITION:
-                dist = np.abs(selectedTargets[i]-bench.cobras.centers[i])
 
         simulator = CollisionSimulator(bench, TargetGroup(selectedTargets, ids))
         simulator.run()
         if np.any(simulator.endPointCollisions):
-            print("ERROR: detected end point collision, which should be impossible")
+            print("ERROR: detected end point collision, which should be impossible",
+                  np.sum(simulator.endPointCollisions))
+            simulator.plotResults(paintFootprints=False)
+            plotUtils.pauseExecution()
         coll_tidx = []
         for tidx, cidx in vis.items():
             if simulator.collisions[cidx]:
@@ -212,9 +208,6 @@ for vis, tp in zip(res, tpos):
     for tidx, cidx in vis.items():
         selectedTargets[cidx] = tp[tidx]
         ids[cidx] = ""
-    for i in range(selectedTargets.size):
-        if selectedTargets[i] != TargetGroup.NULL_TARGET_POSITION:
-            dist = np.abs(selectedTargets[i]-bench.cobras.centers[i])
 
     simulator = CollisionSimulator(bench, TargetGroup(selectedTargets, ids))
     simulator.run()

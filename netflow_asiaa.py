@@ -64,7 +64,6 @@ tgt = nf.readScientificFromFile(fscience_targets, "sci")
 tgt += nf.readCalibrationFromFile(fcal_stars, "cal")
 tgt += nf.readCalibrationFromFile(fsky_pos, "sky")
 
-# get a complete, idealized focal plane configuration
 bench = getBench()
 
 #telescope = inputParamsFromPfsDesign("", ".")
