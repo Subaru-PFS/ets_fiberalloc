@@ -7,8 +7,8 @@ def checkCobraOpsVersion(major, minor, patch):
     from ics.cobraOps import __version__ as cobraOpsVersion
     opsMajor, opsMinor, opsPatch = cobraOpsVersion.split(".")
     if 1000000*int(opsMajor)+1000*int(opsMinor)+int(opsPatch) < 1000000*major+1000*minor+patch:
-        raise RuntimeException(f"installed version of cobraOps is too old, "
-            "need at least {opsMajor}.{opsMinor}.{opsPatch}.")
+        raise RuntimeError(f"installed version of cobraOps is too old, "
+            f"need at least {major}.{minor}.{patch}.")
 
 
 def _get_colliding_pairs(bench, tpos, vis, dist):
@@ -42,18 +42,12 @@ def _get_vis_and_elbow(bench, target, tpos, stage, preassigned_tgts,
     the index of a Cobra that can observe the target and elbowpos is the
     position where this Cobra's elbow would be if it observed this target."""
     from ics.cobraOps.TargetGroup import TargetGroup
-    from ics.cobraOps.TargetSelector import TargetSelector
-
-    class DummyTargetSelector(TargetSelector):
-        def run(self):
-            return
-
-        def selectTargets(self):
-            return
+    from ics.cobraOps.RandomTargetSelector import RandomTargetSelector
 
     checkCobraOpsVersion(1,0,0)
     tgroup = TargetGroup(np.array(tpos))
-    tselect = DummyTargetSelector(bench, tgroup)
+    tselect = RandomTargetSelector(bench, tgroup)
+    tselect.calculateAccessibleTargets(safetyMargin=0)
     tselect.calculateAccessibleTargets(safetyMargin=cobraSafetyMargin)
     tmp = tselect.accessibleTargetIndices
     elb = tselect.accessibleTargetElbows
@@ -75,6 +69,8 @@ def _get_vis_and_elbow(bench, target, tpos, stage, preassigned_tgts,
 
 def _get_elbow_collisions(bench, tpos, vis, dist):
 # FIXME ivis seems redundant?
+    from ics.cobraOps.CollisionSimulator import CollisionSimulator
+
     tpos = np.array(tpos)
     ivis = defaultdict(list)
     epos = defaultdict(list)
@@ -98,7 +94,7 @@ def _get_elbow_collisions(bench, tpos, vis, dist):
                 ebp = np.full(len(i2), elbowpos)
                 tp = np.full(len(i2), tpos[tidx])
                 ti2 = tpos[i2]
-                d = bench.distancesToLineSegments(ti2, tp, ebp)
+                d = CollisionSimulator.distancesToLineSegments(ti2, tp, ebp)
                 res[(cidx, tidx)] += list(i2[d < dist])
     return res
 
@@ -695,7 +691,7 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                 prob.add_constraint(makeName("preassign",  tgtid2idx[tgtid], cidx, ivis),
                                     prob._vardict[varname] == 1)
             else:
-                raise RuntimeError("inconsistence: could not do preassignment "
+                raise RuntimeError("inconsistency: could not do preassignment "
                                    f"of Cobra {cidx} to target {tgtid}")
 
     return prob

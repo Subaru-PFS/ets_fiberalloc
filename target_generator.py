@@ -6,11 +6,9 @@ import matplotlib
 from astropy.table import Table, Column
 
 from ics.cobraOps.Bench import Bench
+from ics.cobraOps.BlackDotsCalibrationProduct import BlackDotsCalibrationProduct
 from ics.cobraOps.RandomTargetSelector import RandomTargetSelector
 from ics.cobraOps.TargetGroup import TargetGroup
-from ics.cobraOps.CobrasCalibrationProduct import CobrasCalibrationProduct
-from ics.cobraOps.CollisionSimulator import CollisionSimulator
-from ics.cobraOps.cobraConstants import NULL_TARGET_POSITION, NULL_TARGET_ID, NULL_TARGET_INDEX
 from pfs import datamodel
 
 DIST_TYPES = OrderedDict()
@@ -21,54 +19,40 @@ DIST_TYPES["exp"] = "Exponential dropoff."
 
 def getBench():
     import os
-    from procedures.moduleTest.cobraCoach import CobraCoach
+    from ics.cobraCharmer.cobraCoach.cobraCoach import CobraCoach
     os.environ["PFS_INSTDATA_DIR"] = "/home/martin/codes/pfs_instdata"
     cobraCoach = CobraCoach(
-        "fpga", loadModel=False, trajectoryMode=True,
-        rootDir="/home/martin/codes/efa/")
-    cobraCoach.loadModel(version="ALL", moduleVersion="final_20210512")
+        loadModel=True, trajectoryMode=True, rootDir="/home/martin/codes/efa/")
     
     # Get the calibration product
     calibrationProduct = cobraCoach.calibModel
-    
-    # Set some dummy center positions and phi angles for those cobras that have
-    # zero centers
-    zeroCenters = calibrationProduct.centers == 0
-    calibrationProduct.centers[zeroCenters] = np.arange(np.sum(zeroCenters)) * 300j
-    calibrationProduct.phiIn[zeroCenters] = -np.pi
-    calibrationProduct.phiOut[zeroCenters] = 0
-    print("Cobras with zero centers: %i" % np.sum(zeroCenters))
-    
-    # Transform the calibration product cobra centers and link lengths units from
-    # pixels to millimeters
-    calibrationProduct.centers -= 5048.0 + 3597.0j
-    calibrationProduct.centers *= np.exp(1j * np.deg2rad(1.0)) / 13.02
-    calibrationProduct.L1 /= 13.02
-    calibrationProduct.L2 /= 13.02
-    
-    # Use the median value link lengths in those cobras with zero link lengths
-    zeroLinkLengths = np.logical_or(
-        calibrationProduct.L1 == 0, calibrationProduct.L2 == 0)
-    calibrationProduct.L1[zeroLinkLengths] = np.median(
-        calibrationProduct.L1[~zeroLinkLengths])
-    calibrationProduct.L2[zeroLinkLengths] = np.median(
-        calibrationProduct.L2[~zeroLinkLengths])
-    print("Cobras with zero link lenghts: %i" % np.sum(zeroLinkLengths))
-    
-    # Use the median value link lengths in those cobras with too long link lengths
-    tooLongLinkLengths = np.logical_or(
-        calibrationProduct.L1 > 100, calibrationProduct.L2 > 100)
-    calibrationProduct.L1[tooLongLinkLengths] = np.median(
-        calibrationProduct.L1[~tooLongLinkLengths])
-    calibrationProduct.L2[tooLongLinkLengths] = np.median(
-        calibrationProduct.L2[~tooLongLinkLengths])
-    print("Cobras with too long link lenghts: %i" % np.sum(tooLongLinkLengths))
-   
+
+    # Fix the phi and tht angles for some of the cobras
+    wrongAngles = calibrationProduct.phiIn == 0
+    calibrationProduct.phiIn[wrongAngles] = -np.pi
+    calibrationProduct.phiOut[wrongAngles] = 0
+    calibrationProduct.tht0[wrongAngles] = 0
+    calibrationProduct.tht1[wrongAngles] = (2.1 * np.pi) % (2 * np.pi)
+    print(f"Number of cobras with wrong phi and tht angles: {np.sum(wrongAngles)}")
+
+    # Check if there is any cobra with too short or too long link lengths
+    tooShortLinks = np.logical_or(
+        calibrationProduct.L1 < 1, calibrationProduct.L2 < 1)
+    tooLongLinks = np.logical_or(
+        calibrationProduct.L1 > 5, calibrationProduct.L2 > 5)
+    print(f"Number of cobras with too short link lenghts: {np.sum(tooShortLinks)}")
+    print(f"Number of cobras with too long link lenghts: {np.sum(tooLongLinks)}")
+
+    # Load the black dots calibration file
+    calibrationFileName = os.path.join(
+        os.environ["PFS_INSTDATA_DIR"], "data/pfi/dot", "black_dots_mm.csv")
+    blackDotsCalibrationProduct = BlackDotsCalibrationProduct(calibrationFileName)
+
     # Create the bench instance
-    bench = Bench(layout="calibration", calibrationProduct=calibrationProduct)
+    bench = Bench(cobraCoach, blackDotsCalibrationProduct)
     print("Number of cobras:", bench.cobras.nCobras)
 
-    return cobraCoach, bench
+    return bench
 
 
 def dist_hom(args):
@@ -110,7 +94,7 @@ def filterTargets(args, bench):
     sel = RandomTargetSelector(bench,TargetGroup(tpos))
     sel.calculateAccessibleTargets()
     tgtidx = sel.accessibleTargetIndices.copy().flatten()
-    tgtidx = tgtidx[tgtidx!=NULL_TARGET_INDEX]
+    tgtidx = tgtidx[tgtidx!=TargetGroup.NULL_TARGET_INDEX]
     bc = np.bincount(tgtidx, minlength=tpos.shape[0])
     return (bc==1)
     
@@ -212,7 +196,7 @@ if args.tel_dec == None:
     print("Option tel_dec not set, setting to {:.6f}".format(args.dec))
     args.tel_dec = args.dec
 
-cobraCoach, bench = getBench()
+bench = getBench()
 
 if args.type == "hom":
     t = dist_hom(args)

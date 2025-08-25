@@ -1,12 +1,47 @@
 import ets_fiber_assigner.netflow as nf
 import numpy as np
-from ics.cobraOps.Bench import Bench
 from ics.cobraOps.TargetGroup import TargetGroup
-from ics.cobraOps.CobrasCalibrationProduct import CobrasCalibrationProduct
 from ics.cobraOps.CollisionSimulator import CollisionSimulator
-from ics.cobraOps.cobraConstants import NULL_TARGET_POSITION, NULL_TARGET_ID
 from ics.cobraOps import plotUtils
 from collections import defaultdict
+
+def getBench():
+    import os
+    from ics.cobraOps.Bench import Bench
+    from ics.cobraCharmer.cobraCoach.cobraCoach import CobraCoach
+    from ics.cobraOps.BlackDotsCalibrationProduct import BlackDotsCalibrationProduct
+    os.environ["PFS_INSTDATA_DIR"] = "/home/martin/codes/pfs_instdata"
+    cobraCoach = CobraCoach(
+        loadModel=True, trajectoryMode=True, rootDir="/home/martin/codes/efa/")
+    
+    # Get the calibration product
+    calibrationProduct = cobraCoach.calibModel
+    
+    # Fix the phi and tht angles for some of the cobras
+    wrongAngles = calibrationProduct.phiIn == 0
+    calibrationProduct.phiIn[wrongAngles] = -np.pi
+    calibrationProduct.phiOut[wrongAngles] = 0
+    calibrationProduct.tht0[wrongAngles] = 0
+    calibrationProduct.tht1[wrongAngles] = (2.1 * np.pi) % (2 * np.pi)
+    print(f"Number of cobras with wrong phi and tht angles: {np.sum(wrongAngles)}")
+
+    # Check if there is any cobra with too short or too long link lengths
+    tooShortLinks = np.logical_or(
+        calibrationProduct.L1 < 1, calibrationProduct.L2 < 1)
+    tooLongLinks = np.logical_or(
+        calibrationProduct.L1 > 5, calibrationProduct.L2 > 5)
+    print(f"Number of cobras with too short link lenghts: {np.sum(tooShortLinks)}")
+    print(f"Number of cobras with too long link lenghts: {np.sum(tooLongLinks)}")
+    
+    # Load the black dots calibration file
+    calibrationFileName = os.path.join(
+        os.environ["PFS_INSTDATA_DIR"],"data/pfi/dot", "black_dots_mm.csv")
+    blackDotsCalibrationProduct = BlackDotsCalibrationProduct(calibrationFileName)
+    
+    # Create the bench instance
+    bench = Bench(cobraCoach, blackDotsCalibrationProduct)
+    print("Number of cobras:", bench.cobras.nCobras)
+    return bench
 
 # make runs reproducible
 np.random.seed(20)
@@ -30,11 +65,7 @@ for x in tgt[::4]:
 #tgt += nf.readCalibrationFromFile(fcal_stars, "cal")
 #tgt += nf.readCalibrationFromFile(fsky_pos, "sky")
 
-# get a complete, idealized focal plane configuration
-bench = Bench(layout="full")
-# if you have the XML file, you can also generate a more realistic focal plane
-# bench = Bench(calibrationProduct=CobrasCalibrationProduct(
-#     "../ics_cobraOps/python/ics/demos/updatedMaps6.xml"))
+bench = getBench()
 
 # point the telescope at the center of all science targets
 raTel, decTel = nf.telescopeRaDecFromFile(fscience_targets)
@@ -110,19 +141,19 @@ while not done:
     print("Checking for trajectory collisions")
     ncoll = 0
     for ivis, (vis, tp) in enumerate(zip(res, tpos)):
-        selectedTargets = np.full(len(bench.cobras.centers), NULL_TARGET_POSITION)
-        ids = np.full(len(bench.cobras.centers), NULL_TARGET_ID)
+        selectedTargets = np.full(len(bench.cobras.centers), TargetGroup.NULL_TARGET_POSITION)
+        ids = np.full(len(bench.cobras.centers), TargetGroup.NULL_TARGET_ID)
         for tidx, cidx in vis.items():
             selectedTargets[cidx] = tp[tidx]
             ids[cidx] = ""
-        for i in range(selectedTargets.size):
-            if selectedTargets[i] != NULL_TARGET_POSITION:
-                dist = np.abs(selectedTargets[i]-bench.cobras.centers[i])
 
         simulator = CollisionSimulator(bench, TargetGroup(selectedTargets, ids))
         simulator.run()
+        simulator.plotResults(paintFootprints=False)
+        plotUtils.pauseExecution()
         if np.any(simulator.endPointCollisions):
-            print("ERROR: detected end point collision, which should be impossible")
+            print("ERROR: detected end point collision, which should be impossible", np.sum(simulator.endPointCollisions))
+            raise RuntimeError
         coll_tidx = []
         for tidx, cidx in vis.items():
             if simulator.collisions[cidx]:
@@ -136,7 +167,7 @@ while not done:
     print("trajectory collisions found:", ncoll)
     done = ncoll == 0
 
-for i, (vis, tp, tel) in enumerate(zip(res, tpos, telescopes)):
+for i, vis in enumerate(res):
     print("exposure {}:".format(i+1))
     print("  assigned Cobras: {}".format(len(vis)))
     tdict = defaultdict(int)
@@ -165,6 +196,9 @@ forbiddenPairs = []
 for i in range(nvisit):
     forbiddenPairs.append([])
 
+print("\nSECOND STAGE\n")
+print(preassigned_list)
+#exit()
 done = False
 while not done:
     # compute observation strategy, now with preassigned list and stage=1
@@ -184,6 +218,8 @@ while not done:
             visited = prob.value(v1) > 0
             if visited:
                 _, _, tidx, cidx, ivis = k1.split("_")
+                if int(tidx) in res[int(ivis)]:
+                    raise RuntimeError("oops")
                 res[int(ivis)][int(tidx)] = int(cidx)
 
     print("Checking for trajectory collisions")
@@ -191,19 +227,24 @@ while not done:
     for ivis, (vis, tp) in enumerate(zip(res, tpos)):
         print("exposure {}:".format(ivis+1))
         print("  assigned Cobras: {}".format(len(vis)))
-        selectedTargets = np.full(len(bench.cobras.centers), NULL_TARGET_POSITION)
-        ids = np.full(len(bench.cobras.centers), NULL_TARGET_ID)
+        selectedTargets = np.full(len(bench.cobras.centers), TargetGroup.NULL_TARGET_POSITION)
+        ids = np.full(len(bench.cobras.centers), TargetGroup.NULL_TARGET_ID)
         for tidx, cidx in vis.items():
             selectedTargets[cidx] = tp[tidx]
             ids[cidx] = ""
-        for i in range(selectedTargets.size):
-            if selectedTargets[i] != NULL_TARGET_POSITION:
-                dist = np.abs(selectedTargets[i]-bench.cobras.centers[i])
 
         simulator = CollisionSimulator(bench, TargetGroup(selectedTargets, ids))
         simulator.run()
+        simulator.plotResults(paintFootprints=False)
+        plotUtils.pauseExecution()
         if np.any(simulator.endPointCollisions):
             print("ERROR: detected end point collision, which should be impossible", np.sum(simulator.endPointCollisions))
+            print("NULL:",NULL_TARGET_POSITION)
+            print(simulator.endPointCollisions.shape)
+            print(selectedTargets[132]==NULL_TARGET_POSITION)
+            print(np.nonzero(simulator.endPointCollisions))
+            print(selectedTargets[np.nonzero(simulator.endPointCollisions)])
+            raise RuntimeError
         coll_tidx = []
         for tidx, cidx in vis.items():
             if simulator.collisions[cidx]:
