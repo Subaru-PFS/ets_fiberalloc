@@ -3,6 +3,14 @@ from collections import defaultdict
 from astropy.table import Table
 
 
+def checkCobraOpsVersion(major, minor, patch):
+    from ics.cobraOps import __version__ as cobraOpsVersion
+    opsMajor, opsMinor, opsPatch = cobraOpsVersion.split(".")
+    if 1000000*int(opsMajor)+1000*int(opsMinor)+int(opsPatch) < 1000000*major+1000*minor+patch:
+        raise RuntimeError(f"installed version of cobraOps is too old, "
+            f"need at least {major}.{minor}.{patch}.")
+
+
 def _get_colliding_pairs(bench, tpos, vis, dist):
     tpos = np.array(tpos)
     ivis = defaultdict(list)
@@ -26,7 +34,8 @@ def _get_colliding_pairs(bench, tpos, vis, dist):
     return pairs
 
 
-def _get_vis_and_elbow(bench, target, tpos, stage, preassigned_tgts, t_observed, t_required):
+def _get_vis_and_elbow(bench, target, tpos, stage, preassigned_tgts,
+    t_observed, t_required, cobraSafetyMargin):
     """Returns a dictionary that contains an entry for each active target
     in the current visit that can be observed by a least one Cobra.
     The value for each entry is a list of (cidx, elbowpos), where cidx is
@@ -35,9 +44,11 @@ def _get_vis_and_elbow(bench, target, tpos, stage, preassigned_tgts, t_observed,
     from ics.cobraOps.TargetGroup import TargetGroup
     from ics.cobraOps.RandomTargetSelector import RandomTargetSelector
 
+    checkCobraOpsVersion(1,0,0)
     tgroup = TargetGroup(np.array(tpos))
     tselect = RandomTargetSelector(bench, tgroup)
     tselect.calculateAccessibleTargets(safetyMargin=0)
+    tselect.calculateAccessibleTargets(safetyMargin=cobraSafetyMargin)
     tmp = tselect.accessibleTargetIndices
     elb = tselect.accessibleTargetElbows
     res = defaultdict(list)
@@ -247,7 +258,8 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                  fiberNonAllocationCost=0.,
                  obsprog_time_budget={},
                  stage=0,
-                 preassigned=None):
+                 preassigned=None,
+                 cobraSafetyMargin=0.):
     """Build the ILP problem for a given observation task
 
     Parameters
@@ -351,6 +363,19 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
         assigned to, for every visit.
         NOTE: since this data structure contains Cobra indices, the `bench`
         object must be identical to the one used to produce those indices! 
+    cobraSafetyMargin : float, nonnegative
+        default : 0.
+        Safety margin (in mm) around the edge of patrol regions, in which no
+        targets will be assigned
+        If this value is positive, netflow will not consider targets that lie
+        closer than this distance to the edge of a Cobra's patrol region for
+        observation by that Cobra.
+        This can be useful when planning an observation run without exactly
+        knowing the observation times beforehand. Depending on the exact
+        observation time (and therefore telescope elevation etc.), the exact
+        projection of the patrol region on the sky will vary slightly, and
+        targets very close to the edge my become unobservable in some
+        configurations.
 
     Returns
     =======
@@ -446,7 +471,7 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
     for ivis in range(nvisits):
         print("  exposure {}".format(ivis+1))
         print("Calculating visibilities")
-        vis = _get_vis_and_elbow(bench, targets, tpos[ivis], stage, preassigned[ivis].keys(),t_observed, t_required)
+        vis = _get_vis_and_elbow(bench, targets, tpos[ivis], stage, preassigned[ivis].keys(),t_observed, t_required, cobraSafetyMargin)
         for tidx, thing in vis.items():
             tgt = targets[tidx]
                     
