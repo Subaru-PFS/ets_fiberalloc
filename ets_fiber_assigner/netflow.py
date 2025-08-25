@@ -3,6 +3,14 @@ from collections import defaultdict
 from astropy.table import Table
 
 
+def checkCobraOpsVersion(major, minor, patch):
+    from ics.cobraOps import __version__ as cobraOpsVersion
+    opsMajor, opsMinor, opsPatch = cobraOpsVersion.split(".")
+    if 1000000*int(opsMajor)+1000*int(opsMinor)+int(opsPatch) < 1000000*major+1000*minor+patch:
+        raise RuntimeException(f"installed version of cobraOps is too old, "
+            "need at least {opsMajor}.{opsMinor}.{opsPatch}.")
+
+
 def _get_colliding_pairs(bench, tpos, vis, dist):
     tpos = np.array(tpos)
     ivis = defaultdict(list)
@@ -43,6 +51,7 @@ def _get_vis_and_elbow(bench, target, tpos, stage, preassigned_tgts,
         def selectTargets(self):
             return
 
+    checkCobraOpsVersion(1,0,0)
     tgroup = TargetGroup(np.array(tpos))
     tselect = DummyTargetSelector(bench, tgroup)
     tselect.calculateAccessibleTargets(safetyMargin=cobraSafetyMargin)
