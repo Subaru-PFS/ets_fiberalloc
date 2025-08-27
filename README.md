@@ -5,19 +5,6 @@ Current development:
 - `ets_fiber_assigner/netflow.py`:
   fiber assignment tool based on a network flow algorithm
 
-
-Mostly of historical interest:
-
-- `src/pyETS.cc`:
-  wrapper file describing the functionality exported to Python
-
-- `src/ets.*, src/ets_helpers.h`:
-  C++ implementation of the assigners and associated functionality
-
-- Directory `src/external/`:
-  C and C++ sources that were originally developed for the Planck simulation
-  pipeline and can be re-used for ETS
-
 ## Compiling/Installing:
 
 ### Prerequisites
