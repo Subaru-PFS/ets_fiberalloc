@@ -1,0 +1,30 @@
+[project]
+name = "ets_fiber_assigner"
+readme = "README.md"
+authors = [
+  {name = "Martin Reinecke", email = "martin@mpa-garching.mpg.de"},
+]
+requires-python = ">=3.10"
+dependencies = [
+  "numpy >= 1.17.0",
+# we still need version constraints for those, to ensure compatibility
+#  "ics.cobraOps",
+#  "pfs.datamodel",
+#  "pfs.utils",
+]
+description = "Fiber assignment code for the PFS instrument"
+license = "GPL-2.0-or-later"
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Science/Research",
+  "Topic :: Scientific/Engineering :: Mathematics",
+  "Topic :: Scientific/Engineering :: Physics",
+  "Programming Language :: Python",
+]
+dynamic = ["version"]
+
+[tool.setuptools]
+packages = ["ets_fiber_assigner"]
+
+[tool.setuptools.dynamic]
+version = {attr = "ets_fiber_assigner.__version__"}
