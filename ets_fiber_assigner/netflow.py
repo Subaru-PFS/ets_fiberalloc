@@ -259,7 +259,8 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                  obsprog_time_budget={},
                  stage=0,
                  preassigned=None,
-                 cobraSafetyMargin=0.):
+                 cobraSafetyMargin=0.,
+                 assignEveryCobra=False):
     """Build the ILP problem for a given observation task
 
     Parameters
@@ -376,6 +377,11 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
         projection of the patrol region on the sky will vary slightly, and
         targets very close to the edge my become unobservable in some
         configurations.
+    assignEveryCobra : bool
+        default : False
+        If True, every Cobra must be assigned to a target for every visit.
+        If that is not possible, the problem is infasible and an exception
+        is thrown.
 
     Returns
     =======
@@ -605,9 +611,15 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
         prob.add_lazy_constraint(c[0], c[1])
 
     # every Cobra can observe at most one target per visit
-    for key, inflow in Cv_i.items():
-        prob.add_constraint(makeName("Cvlim", key[0], key[1]),
-                            prob.sum([f for f in inflow]) <= 1)
+    # if assignEveryCobra is True, it must observe exactly one target per visit
+    if assignEveryCobra:
+        for key, inflow in Cv_i.items():
+            prob.add_constraint(makeName("Cvlim", key[0], key[1]),
+                                prob.sum([f for f in inflow]) == 1)
+    else:
+        for key, inflow in Cv_i.items():
+            prob.add_constraint(makeName("Cvlim", key[0], key[1]),
+                                prob.sum([f for f in inflow]) <= 1)
 
     # every calibration target class must be observed a minimum number of times
     # every visit
