@@ -894,7 +894,7 @@ def telescopeRaDecFromFile(file):
     return float(np.average(ras)), float(np.average(decs))
 
 
-def readScientificFromFile(file, prefix):
+def readScientificFromFile(file, prefix, fits=False):
     """Read a set of scientific targets from a file
 
     Parameters
@@ -903,6 +903,8 @@ def readScientificFromFile(file, prefix):
         the name os the text file containing the target information
     prefix : string
         the name of the target class to which these targets will belong
+    fits : bool == False
+        if False, assumes a text file in "ascii.ecsv" format, otherwise FITS
 
     Returns
     =======
@@ -914,7 +916,7 @@ def readScientificFromFile(file, prefix):
 
     try:
         # first try reading as ecsv format
-        t = Table.read(file, format="ascii.ecsv")
+        t = Table.read(file) if fits else Table.read(file, format="ascii.ecsv")
         res = []
         for r in t:
             try:
@@ -941,7 +943,7 @@ def readScientificFromFile(file, prefix):
     return res
 
 
-def readCalibrationFromFile(file, targetclass):
+def readCalibrationFromFile(file, targetclass, fits=False):
     """Read a set of calibration targets from a file
 
     Parameters
@@ -950,6 +952,8 @@ def readCalibrationFromFile(file, targetclass):
         the name os the text file containing the target information
     targetclass : string
         the name of the target class to which these targets will belong
+    fits : bool == False
+        if False, assumes a text file in "ascii.ecsv" format, otherwise FITS
 
     Returns
     =======
@@ -957,7 +961,7 @@ def readCalibrationFromFile(file, targetclass):
     """
     try:
         # first try reading as ecsv format
-        t = Table.read(file, format="ascii.ecsv")
+        t = Table.read(file) if fits else Table.read(file, format="ascii.ecsv")
         res = []
         for r in t:
             try:
@@ -982,7 +986,7 @@ def readCalibrationFromFile(file, targetclass):
     return res
 
 
-def readCalibrationWithPenaltyFromFile(file, targetclass):
+def readCalibrationWithPenaltyFromFile(file, targetclass, fits=False):
     """Read a set of calibration targets from a file
 
     Parameters
@@ -991,12 +995,14 @@ def readCalibrationWithPenaltyFromFile(file, targetclass):
         the name of the text file containing the target information
     targetclass : string
         the name of the target class to which these targets will belong
+    fits : bool == False
+        if False, assumes a text file in "ascii.ecsv" format, otherwise FITS
 
     Returns
     =======
     list of CalibrationTarget : the created CalibrationTarget objects
     """
-    t = Table.read(file, format="ascii.ecsv")
+    t = Table.read(file) if fits else Table.read(file, format="ascii.ecsv")
     res = []
     for r in t:
         try:
