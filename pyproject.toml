@@ -3,14 +3,17 @@ name = "ets_fiber_assigner"
 readme = "README.md"
 authors = [
   {name = "Martin Reinecke", email = "martin@mpa-garching.mpg.de"},
+  {name = "Maximilian Fabricius"},
 ]
 requires-python = ">=3.10"
 dependencies = [
   "numpy >= 1.17.0",
+# what is our minimum required astropy version? We just need the Table class
+  "astropy",
 # we still need version constraints for those, to ensure compatibility
-#  "ics.cobraOps",
-#  "pfs.datamodel",
-#  "pfs.utils",
+#  "ics.cobraOps @ git+https://github.com/Subaru-PFS/ics_cobraOps.git@2.0.1",
+#  "pfs.datamodel @ git+https://github.com/Subaru-PFS/datamodel.git",
+#  "pfs.utils @ git+https://github.com/Subaru-PFS/pfs_utils.git",
 ]
 description = "Fiber assignment code for the PFS instrument"
 license = "GPL-2.0-or-later"
