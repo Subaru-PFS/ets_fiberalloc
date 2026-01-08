@@ -35,7 +35,7 @@ def _get_colliding_pairs(bench, tpos, vis, dist):
 
 
 def _get_vis_and_elbow(bench, target, tpos, stage, preassigned_tgts,
-    t_observed, t_required, cobraSafetyMargin):
+    t_observed, t_required, cobraSafetyMargin, cobraFeatureFlags):
     """Returns a dictionary that contains an entry for each active target
     in the current visit that can be observed by a least one Cobra.
     The value for each entry is a list of (cidx, elbowpos), where cidx is
@@ -59,7 +59,9 @@ def _get_vis_and_elbow(bench, target, tpos, stage, preassigned_tgts,
         for i, tidx in enumerate(tmp[cbr, :]):
             if ((tidx >= 0) and
                     (t_observed[tidx]< t_required[tidx]) and
-                    (target[tidx].stage==stage or target[tidx].ID in preassigned_tgts)):
+                    (target[tidx].stage==stage or target[tidx].ID in preassigned_tgts) and
+                    # does the fiber provide the features required by the target?
+                    (((~target[tidx]._req_flags)) & cobraFeatureFlags[cbr] == 0)):
                 res[tidx].append((cbr, elb[cbr, i]))
 
 #    nonobservable_targets = set(range(len(tpos))).difference(observable_targets)
@@ -259,7 +261,8 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                  obsprog_time_budget={},
                  stage=0,
                  preassigned=None,
-                 cobraSafetyMargin=0.):
+                 cobraSafetyMargin=0.,
+                 cobraFeatureFlags=None):
     """Build the ILP problem for a given observation task
 
     Parameters
@@ -376,11 +379,23 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
         projection of the patrol region on the sky will vary slightly, and
         targets very close to the edge my become unobservable in some
         configurations.
+    TEMPORARY:
+    cobraFeatureFlags : list of nonnegative integers,
+        length must match number of Cobras in the bench object
+
+        if this is `None`, it will be assumed that all Cobras have a flag value
+        of 0, i.e. that all feqtures are supported.
 
     Returns
     =======
     LPProblem : the ILP problem object
     """
+    #TEMPORARY
+    if cobraFeatureFlags is None:
+        cobraFeatureFlags = [0] * bench.cobras.nCobras
+    if len(cobraFeatureFlags) != bench.cobras.nCobras:
+        raise RuntimeError("bad length of cobraFeatureFlags")
+
     Cv_i = defaultdict(list)  # Cobra visit inflows
     Tv_o = defaultdict(list)  # Target visit outflows
     Tv_i = defaultdict(list)  # Target visit inflows
@@ -471,7 +486,7 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
     for ivis in range(nvisits):
         print("  exposure {}".format(ivis+1))
         print("Calculating visibilities")
-        vis = _get_vis_and_elbow(bench, targets, tpos[ivis], stage, preassigned[ivis].keys(),t_observed, t_required, cobraSafetyMargin)
+        vis = _get_vis_and_elbow(bench, targets, tpos[ivis], stage, preassigned[ivis].keys(),t_observed, t_required, cobraSafetyMargin, cobraFeatureFlags)
         for tidx, thing in vis.items():
             tgt = targets[tidx]
                     
@@ -758,10 +773,15 @@ class Target(object):
     is known.
     Each target also has an integer property `stage` for multi-stage assignment.
     At stage 0, only targets with `stage==0` are taken into account, at stage
-    1 only targets with `stage==1` etc. """
+    1 only targets with `stage==1` etc.
+    req_flags is a set of flags (represented by an integer) describing
+    specific feature requirements of a target. The meaning of the individual
+    bits will have to be specified elsewhere. If a given bit is not set (0),
+    it will be assumed that the feature in question is required. The default
+    value is 0, i.e. "all features required"."""
 
     def __init__(self, ID, ra, dec, targetclass, pmra=0, pmdec=0, parallax=0,
-                 epoch=2000.0, stage=0):
+                 epoch=2000.0, stage=0, req_flags=0):
         self._ID = str(ID)
         self._ra = float(ra)
         self._dec = float(dec)
@@ -771,6 +791,7 @@ class Target(object):
         self._epoch = float(epoch)
         self._targetclass = targetclass
         self._stage = int(stage)
+        self._req_flags = int(req_flags)
 
     @property
     def ID(self):
@@ -830,10 +851,12 @@ class ScienceTarget(Target):
     """
 
     def __init__(self, ID, ra, dec, obs_time, pri, prefix, pmra=0, pmdec=0,
-                 parallax=0, epoch=2000., stage=0):
+                 parallax=0, epoch=2000., stage=0, req_flags=0):
         super(ScienceTarget, self).__init__(ID, ra, dec,
                                             "{}_P{}".format(prefix, pri),
-                                            pmra=pmra, pmdec=pmdec, parallax=parallax, epoch=epoch,stage=stage
+                                            pmra=pmra, pmdec=pmdec, parallax=parallax,
+                                            epoch=epoch, stage=stage,
+                                            req_flags=req_flags
                                             )
         self._obs_time = float(obs_time)
         self._pri = int(pri)
@@ -851,9 +874,11 @@ class CalibTarget(Target):
     """Derived from the Target class."""
 
     def __init__(self, ID, ra, dec, targetclass, penalty=0., pmra=0, pmdec=0,
-                 parallax=0, epoch=2000., stage=0):
+                 parallax=0, epoch=2000., stage=0, req_flags=0):
         super(CalibTarget, self).__init__(ID, ra, dec, targetclass,
-                                          pmra=pmra, pmdec=pmdec, parallax=parallax, epoch=epoch, stage=stage
+                                          pmra=pmra, pmdec=pmdec, parallax=parallax,
+                                          epoch=epoch, stage=stage,
+                                          req_flags=req_flags
                                           )
         self._penalty = penalty
 
@@ -914,6 +939,9 @@ def readScientificFromFile(file, prefix, fits=False):
     # FIXME: add a routine that can read proper motion and parallax information
     #        from the file, as soon as the file format has been defined
 
+    # TEMPORARY
+    FEATURE_FLAG_IDX_N2 = 0  # we use bit #0 for this feature
+
     try:
         # first try reading as ecsv format
         t = Table.read(file) if fits else Table.read(file, format="ascii.ecsv")
@@ -923,8 +951,15 @@ def readScientificFromFile(file, prefix, fits=False):
                 stg = int(r["stage"])
             except KeyError:
                 stg = 0
+            req_flags = 0  # require all features by default
+            # if we have the "qa_reference_arm" column, check if we require the "n" arm
+            try:
+                req_flags = (1 << FEATURE_FLAG_IDX_N2) if r["qa_reference_arm"] != "n" else 0
+            except KeyError:
+                req_flags = 0
             res.append(ScienceTarget(r["ID"], r["R.A."], r["Dec."],
-                       r["Exposure Time"], r["Priority"], prefix, stage=stg))
+                       r["Exposure Time"], r["Priority"], prefix, stage=stg,
+                       req_flags=req_flags))
         return res
     except:
         pass
