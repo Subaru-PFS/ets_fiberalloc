@@ -382,9 +382,18 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
     TEMPORARY:
     cobraFeatureFlags : list of nonnegative integers,
         length must match number of Cobras in the bench object
+        Each number is a bit set of (un)supported features that must match
+        the corresponding requirement bit set of the scientific targets.
 
-        if this is `None`, it will be assumed that all Cobras have a flag value
-        of 0, i.e. that all feqtures are supported.
+        A bit value of 0 means that the corresponding feature is supported;
+        a value of 1 means that the feature is not supported by the Cobra.
+        This unintuitive choice of values is useful to make the scheme more
+        robust against future extensions: whenever new complications with the
+        instrument are discovered and new flags added, all previously existing
+        flags will default to "Cobra is fine with respect to the new problem".
+
+        if cobraFeatureFlags is `None`, it will be assumed that all Cobras
+        have a flag value of 0, i.e. that all features are supported.
 
     Returns
     =======
