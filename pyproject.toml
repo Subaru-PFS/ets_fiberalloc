@@ -11,7 +11,7 @@ dependencies = [
 # what is our minimum required astropy version? We just need the Table class
   "astropy",
 # we still need version constraints for those, to ensure compatibility
-#  "ics.cobraOps @ git+https://github.com/Subaru-PFS/ics_cobraOps.git@2.0.1",
+#  "ics.cobraOps @ git+https://github.com/Subaru-PFS/ics_cobraOps.git@2.0.5",
 #  "pfs.datamodel @ git+https://github.com/Subaru-PFS/datamodel.git",
 #  "pfs.utils @ git+https://github.com/Subaru-PFS/pfs_utils.git",
 ]
