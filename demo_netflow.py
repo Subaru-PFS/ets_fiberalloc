@@ -1,5 +1,3 @@
-#NOTE TO SELF: pfs_utils.fiber_id!
-
 import ets_fiber_assigner.netflow as nf
 import numpy as np
 from collections import defaultdict
