@@ -1,8 +1,5 @@
 import ets_fiber_assigner.netflow as nf
 import numpy as np
-from ics.cobraOps.TargetGroup import TargetGroup
-from ics.cobraOps.CollisionSimulator import CollisionSimulator
-from ics.cobraOps import plotUtils
 from collections import defaultdict
 from getBench import getBench
 
@@ -78,57 +75,24 @@ gurobiOptions = dict(seed=0, presolve=1, method=4, degenmoves=0,
                      heuristics=0.8, mipfocus=0, mipgap=1.0e-04)
 
 
-forbiddenPairs = [[] for _ in range(nvisit)]
-
 # first stage
-done = False
-while not done:
-    # compute observation strategy
-    prob = nf.buildProblem(bench, tgt, tpos, classdict, t_obs,
-                           collision_distance=2., elbow_collisions=True,
-                           gurobi=False, gurobiOptions=gurobiOptions,
-                           forbiddenPairs=forbiddenPairs,obsprog_time_budget=time_budget)
+# compute observation strategy
+prob = nf.buildProblem(bench, tgt, tpos, classdict, t_obs,
+                       collision_distance=2., elbow_collisions=True,
+                       gurobi=False, gurobiOptions=gurobiOptions,
+                       obsprog_time_budget=time_budget)
 
-    print("solving the problem")
-    prob.solve()
+print("solving the problem")
+prob.solve()
 
-    # extract solution
-    res = [{} for _ in range(nvisit)]
-    for k1, v1 in prob._vardict.items():
-        if k1.startswith("Tv_Cv_"):
-            visited = prob.value(v1) > 0
-            if visited:
-                _, _, tidx, cidx, ivis = k1.split("_")
-                res[int(ivis)][int(tidx)] = int(cidx)
-
-    print("Checking for trajectory collisions")
-    ncoll = 0
-    for ivis, (vis, tp) in enumerate(zip(res, tpos)):
-        selectedTargets = np.full(len(bench.cobras.centers), TargetGroup.NULL_TARGET_POSITION)
-        ids = np.full(len(bench.cobras.centers), TargetGroup.NULL_TARGET_ID)
-        for tidx, cidx in vis.items():
-            selectedTargets[cidx] = tp[tidx]
-            ids[cidx] = ""
-
-        simulator = CollisionSimulator(bench, TargetGroup(selectedTargets, ids))
-        simulator.run()
-        simulator.plotResults(paintFootprints=False)
-        plotUtils.pauseExecution()
-        if np.any(simulator.endPointCollisions):
-            print("ERROR: detected end point collision, which should be impossible", np.sum(simulator.endPointCollisions))
-            raise RuntimeError
-        coll_tidx = []
-        for tidx, cidx in vis.items():
-            if simulator.collisions[cidx]:
-                coll_tidx.append(tidx)
-        ncoll += len(coll_tidx)
-        for i1 in range(0,len(coll_tidx)):
-            for i2 in range(i1+1,len(coll_tidx)):
-                if np.abs(tp[coll_tidx[i1]]-tp[coll_tidx[i2]])<10:
-                    forbiddenPairs[ivis].append((coll_tidx[i1],coll_tidx[i2]))
-
-    print("trajectory collisions found:", ncoll)
-    done = ncoll == 0
+# extract solution
+res = [{} for _ in range(nvisit)]
+for k1, v1 in prob._vardict.items():
+    if k1.startswith("Tv_Cv_"):
+        visited = prob.value(v1) > 0
+        if visited:
+            _, _, tidx, cidx, ivis = k1.split("_")
+            res[int(ivis)][int(tidx)] = int(cidx)
 
 for i, vis in enumerate(res):
     print("exposure {}:".format(i+1))
@@ -154,72 +118,28 @@ for i, vis in enumerate(res):
 
 # second stage
 
-# reset forbidden pairs list
-forbiddenPairs = []
-for i in range(nvisit):
-    forbiddenPairs.append([])
-
 print("\nSECOND STAGE\n")
 print(preassigned_list)
-#exit()
-done = False
-while not done:
-    # compute observation strategy, now with preassigned list and stage=1
-    prob = nf.buildProblem(bench, tgt, tpos, classdict, t_obs,
-                           collision_distance=2., elbow_collisions=True,
-                           gurobi=False, gurobiOptions=gurobiOptions,
-                           forbiddenPairs=forbiddenPairs, stage=1, preassigned=preassigned_list)
+# compute observation strategy, now with preassigned list and stage=1
+prob = nf.buildProblem(bench, tgt, tpos, classdict, t_obs,
+                       collision_distance=2., elbow_collisions=True,
+                       gurobi=False, gurobiOptions=gurobiOptions,
+                       stage=1, preassigned=preassigned_list)
 
-    print("solving the problem")
-    prob.solve()
-    prob.dump("dump")
+print("solving the problem")
+prob.solve()
+prob.dump("dump")
 
-    # extract solution
-    res = [{} for _ in range(nvisit)]
-    for k1, v1 in prob._vardict.items():
-        if k1.startswith("Tv_Cv_"):
-            visited = prob.value(v1) > 0
-            if visited:
-                _, _, tidx, cidx, ivis = k1.split("_")
-                if int(tidx) in res[int(ivis)]:
-                    raise RuntimeError("oops")
-                res[int(ivis)][int(tidx)] = int(cidx)
-
-    print("Checking for trajectory collisions")
-    ncoll = 0
-    for ivis, (vis, tp) in enumerate(zip(res, tpos)):
-        print("exposure {}:".format(ivis+1))
-        print("  assigned Cobras: {}".format(len(vis)))
-        selectedTargets = np.full(len(bench.cobras.centers), TargetGroup.NULL_TARGET_POSITION)
-        ids = np.full(len(bench.cobras.centers), TargetGroup.NULL_TARGET_ID)
-        for tidx, cidx in vis.items():
-            selectedTargets[cidx] = tp[tidx]
-            ids[cidx] = ""
-
-        simulator = CollisionSimulator(bench, TargetGroup(selectedTargets, ids))
-        simulator.run()
-        simulator.plotResults(paintFootprints=False)
-        plotUtils.pauseExecution()
-        if np.any(simulator.endPointCollisions):
-            print("ERROR: detected end point collision, which should be impossible", np.sum(simulator.endPointCollisions))
-            print("NULL:",NULL_TARGET_POSITION)
-            print(simulator.endPointCollisions.shape)
-            print(selectedTargets[132]==NULL_TARGET_POSITION)
-            print(np.nonzero(simulator.endPointCollisions))
-            print(selectedTargets[np.nonzero(simulator.endPointCollisions)])
-            raise RuntimeError
-        coll_tidx = []
-        for tidx, cidx in vis.items():
-            if simulator.collisions[cidx]:
-                coll_tidx.append(tidx)
-        ncoll += len(coll_tidx)
-        for i1 in range(0,len(coll_tidx)):
-            for i2 in range(i1+1,len(coll_tidx)):
-                if np.abs(tp[coll_tidx[i1]]-tp[coll_tidx[i2]])<10:
-                    forbiddenPairs[ivis].append((coll_tidx[i1],coll_tidx[i2]))
-
-    print("trajectory collisions found:", ncoll)
-    done = ncoll == 0
+# extract solution
+res = [{} for _ in range(nvisit)]
+for k1, v1 in prob._vardict.items():
+    if k1.startswith("Tv_Cv_"):
+        visited = prob.value(v1) > 0
+        if visited:
+            _, _, tidx, cidx, ivis = k1.split("_")
+            if int(tidx) in res[int(ivis)]:
+                raise RuntimeError("oops")
+            res[int(ivis)][int(tidx)] = int(cidx)
 
 for i, (vis, tp, tel) in enumerate(zip(res, tpos, telescopes)):
     print("exposure {}:".format(i+1))
