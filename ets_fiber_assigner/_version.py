@@ -1,6 +1,6 @@
 import subprocess
 
-__version__ = "3.3.0"
+__version__ = "3.4.0"
 
 try:
     tmp = subprocess.run(["git", "describe", "--dirty"], capture_output=True, text=True)
