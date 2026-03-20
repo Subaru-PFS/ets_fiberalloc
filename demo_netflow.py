@@ -101,7 +101,7 @@ while not done:
                            collision_distance=2., elbow_collisions=True,
                            gurobi=False, gurobiOptions=gurobiOptions,
                            alreadyObserved=alreadyObserved,
-                           forbiddenPairs=forbiddenPairs)
+                           forbiddenPairs=forbiddenPairs, brokenCobrasMargin=1.)
 
     # print("writing problem to file ", mpsName)
     # prob.dump(mpsName)
