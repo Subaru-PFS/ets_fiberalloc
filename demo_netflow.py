@@ -91,7 +91,7 @@ prob = nf.buildProblem(bench, tgt, tpos, classdict, t_obs,
                        vis_cost, cobraMoveCost=cobraMoveCost,
                        collision_distance=2., elbow_collisions=True,
                        gurobi=False, gurobiOptions=gurobiOptions,
-                       alreadyObserved=alreadyObserved)
+                       alreadyObserved=alreadyObserved, brokenCobrasMargin=1.)
 
 # print("writing problem to file ", mpsName)
 # prob.dump(mpsName)
