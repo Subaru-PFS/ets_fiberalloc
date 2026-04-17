@@ -1,8 +1,5 @@
 import ets_fiber_assigner.netflow as nf
 import numpy as np
-from ics.cobraOps.TargetGroup import TargetGroup
-from ics.cobraOps.CollisionSimulator import CollisionSimulator
-from ics.cobraOps import plotUtils
 from collections import defaultdict
 from getBench import getBench
    
@@ -89,63 +86,28 @@ alreadyObserved={}
 #for t in tgt[::10]:
 #    alreadyObserved[t.ID] = 1*t_obs
 
-forbiddenPairs = []
-for i in range(nvisit):
-    forbiddenPairs.append([])
+# compute observation strategy
+prob = nf.buildProblem(bench, tgt, tpos, classdict, t_obs,
+                       vis_cost, cobraMoveCost=cobraMoveCost,
+                       collision_distance=2., elbow_collisions=True,
+                       gurobi=False, gurobiOptions=gurobiOptions,
+                       alreadyObserved=alreadyObserved, brokenCobrasMargin=1.)
 
-done = False
-while not done:
-    # compute observation strategy
-    prob = nf.buildProblem(bench, tgt, tpos, classdict, t_obs,
-                           vis_cost, cobraMoveCost=cobraMoveCost,
-                           collision_distance=2., elbow_collisions=True,
-                           gurobi=False, gurobiOptions=gurobiOptions,
-                           alreadyObserved=alreadyObserved,
-                           forbiddenPairs=forbiddenPairs, brokenCobrasMargin=1.)
+# print("writing problem to file ", mpsName)
+# prob.dump(mpsName)
 
-    # print("writing problem to file ", mpsName)
-    # prob.dump(mpsName)
+print("solving the problem")
+prob.solve()
 
-    print("solving the problem")
-    prob.solve()
+# extract solution
+res = [{} for _ in range(nvisit)]
+for k1, v1 in prob._vardict.items():
+    if k1.startswith("Tv_Cv_"):
+        visited = prob.value(v1) > 0
+        if visited:
+            _, _, tidx, cidx, ivis = k1.split("_")
+            res[int(ivis)][int(tidx)] = int(cidx)
 
-    # extract solution
-    res = [{} for _ in range(nvisit)]
-    for k1, v1 in prob._vardict.items():
-        if k1.startswith("Tv_Cv_"):
-            visited = prob.value(v1) > 0
-            if visited:
-                _, _, tidx, cidx, ivis = k1.split("_")
-                res[int(ivis)][int(tidx)] = int(cidx)
-
-    print("Checking for trajectory collisions")
-    ncoll = 0
-    for ivis, (vis, tp) in enumerate(zip(res, tpos)):
-        selectedTargets = np.full(len(bench.cobras.centers), TargetGroup.NULL_TARGET_POSITION)
-        ids = np.full(len(bench.cobras.centers), TargetGroup.NULL_TARGET_ID)
-        for tidx, cidx in vis.items():
-            selectedTargets[cidx] = tp[tidx]
-            ids[cidx] = ""
-
-        simulator = CollisionSimulator(bench, TargetGroup(selectedTargets, ids))
-        simulator.run()
-        if np.any(simulator.endPointCollisions):
-            print("ERROR: detected end point collision, which should be impossible",
-                  np.sum(simulator.endPointCollisions))
-            simulator.plotResults(paintFootprints=False)
-            plotUtils.pauseExecution()
-        coll_tidx = []
-        for tidx, cidx in vis.items():
-            if simulator.collisions[cidx]:
-                coll_tidx.append(tidx)
-        ncoll += len(coll_tidx)
-        for i1 in range(0,len(coll_tidx)):
-            for i2 in range(i1+1,len(coll_tidx)):
-                if np.abs(tp[coll_tidx[i1]]-tp[coll_tidx[i2]])<10:
-                    forbiddenPairs[ivis].append((coll_tidx[i1],coll_tidx[i2]))
-
-    print("trajectory collisions found:", ncoll)
-    done = ncoll == 0
 
 # write output file
 with open("output.txt", "w") as f:
@@ -164,15 +126,3 @@ with open("output.txt", "w") as f:
                             tgt[tidx].ra, tgt[tidx].dec))
         for cls, num in tdict.items():
             print("   {}: {}".format(cls, num))
-
-for vis, tp in zip(res, tpos):
-    selectedTargets = np.full(len(bench.cobras.centers), TargetGroup.NULL_TARGET_POSITION)
-    ids = np.full(len(bench.cobras.centers), TargetGroup.NULL_TARGET_ID)
-    for tidx, cidx in vis.items():
-        selectedTargets[cidx] = tp[tidx]
-        ids[cidx] = ""
-
-    simulator = CollisionSimulator(bench, TargetGroup(selectedTargets, ids))
-    simulator.run()
-    simulator.plotResults(paintFootprints=False)
-    plotUtils.pauseExecution()
