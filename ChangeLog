@@ -1,6 +1,11 @@
 Recent changes to the ets_fiberalloc package,
 in reverse chronological order:
 
+yet unreleased:
+  https://pfs-jira.naoj.org/jira/browse/FIBERALLOC-61
+  (Allow perturbation of target observation cost)
+
+
 - v3.5:
   https://pfs-jira.naoj.org/jira/browse/FIBERALLOC-59
   (add support for cobraOps parameter "brokenCobrasMargin")
