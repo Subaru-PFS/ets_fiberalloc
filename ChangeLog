@@ -5,6 +5,12 @@ yet unreleased:
   https://pfs-jira.naoj.org/jira/browse/FIBERALLOC-61
   (Allow perturbation of target observation cost)
 
+- v3.6:
+  adjust to cobraOps 2.0.6
+    - simpler bench creation
+    - new parameter "fiducialsAvoidDistance"
+      (no JIRA issue, since this is a temporary measure and will be
+      replaced in the future)
 
 - v3.5:
   https://pfs-jira.naoj.org/jira/browse/FIBERALLOC-59

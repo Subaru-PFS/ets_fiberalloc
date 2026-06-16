@@ -36,7 +36,7 @@ def _get_colliding_pairs(bench, tpos, vis, dist):
 
 def _get_vis_and_elbow(bench, target, tpos, stage, preassigned_tgts,
     t_observed, t_required, cobraSafetyMargin, cobraFeatureFlags,
-    brokenCobrasMargin):
+    brokenCobrasMargin, fiducialsAvoidDistance):
     """Returns a dictionary that contains an entry for each active target
     in the current visit that can be observed by a least one Cobra.
     The value for each entry is a list of (cidx, elbowpos), where cidx is
@@ -49,7 +49,8 @@ def _get_vis_and_elbow(bench, target, tpos, stage, preassigned_tgts,
     tgroup = TargetGroup(np.array(tpos))
     tselect = RandomTargetSelector(bench, tgroup)
     tselect.calculateAccessibleTargets(safetyMargin=cobraSafetyMargin,
-                                       brokenCobrasMargin=brokenCobrasMargin)
+                                       brokenCobrasMargin=brokenCobrasMargin,
+                                       fiducialsAvoidDistance=fiducialsAvoidDistance)
     tmp = tselect.accessibleTargetIndices
     elb = tselect.accessibleTargetElbows
     res = defaultdict(list)
@@ -265,7 +266,8 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                  cobraSafetyMargin=0.,
                  cobraFeatureFlags=None,
                  brokenCobrasMargin=0.,
-                 targetCostOffset=None):
+                 targetCostOffset=None,
+                 fiducialsAvoidDistance=0):
     """Build the ILP problem for a given observation task
 
     Parameters
@@ -409,6 +411,10 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
         per-target perturbation of the overall cost function, if this target
         is observed. Used to break degeneracies and guarantee reproducible
         assignments.
+    fiducialsAvoidDistance: float, optional
+        The distance in mm to use to avoid collisions with the fiducial
+        fibers. Default is 0, which means that targets will not be
+        invalidated based on their distance to the fiducials.
 
     Returns
     =======
@@ -513,7 +519,8 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
         vis = _get_vis_and_elbow(bench, targets, tpos[ivis], stage,
                                  preassigned[ivis].keys(),t_observed,
                                  t_required, cobraSafetyMargin,
-                                 cobraFeatureFlags, brokenCobrasMargin)
+                                 cobraFeatureFlags, brokenCobrasMargin,
+                                 fiducialsAvoidDistance)
         for tidx, thing in vis.items():
             tgt = targets[tidx]
                     
