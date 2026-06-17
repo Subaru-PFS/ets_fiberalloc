@@ -36,7 +36,7 @@ def _get_colliding_pairs(bench, tpos, vis, dist):
 
 def _get_vis_and_elbow(bench, target, tpos, stage, preassigned_tgts,
     t_observed, t_required, cobraSafetyMargin, cobraFeatureFlags,
-    brokenCobrasMargin, fiducialsAvoidDistance):
+    brokenCobrasMargin, avoidFiducials):
     """Returns a dictionary that contains an entry for each active target
     in the current visit that can be observed by a least one Cobra.
     The value for each entry is a list of (cidx, elbowpos), where cidx is
@@ -50,7 +50,7 @@ def _get_vis_and_elbow(bench, target, tpos, stage, preassigned_tgts,
     tselect = RandomTargetSelector(bench, tgroup)
     tselect.calculateAccessibleTargets(safetyMargin=cobraSafetyMargin,
                                        brokenCobrasMargin=brokenCobrasMargin,
-                                       fiducialsAvoidDistance=fiducialsAvoidDistance)
+                                       avoidFiducials=avoidFiducials)
     tmp = tselect.accessibleTargetIndices
     elb = tselect.accessibleTargetElbows
     res = defaultdict(list)
@@ -266,7 +266,7 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                  cobraSafetyMargin=0.,
                  cobraFeatureFlags=None,
                  brokenCobrasMargin=0.,
-                 fiducialsAvoidDistance=0):
+                 avoidFiducials=True):
     """Build the ILP problem for a given observation task
 
     Parameters
@@ -406,10 +406,9 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
         This is given as a fraction of "brokenCobrasRmax", i.e. the maximum
         patrol area radius of any broken Cobra.
         Useful values should be in the range [0;1].
-    fiducialsAvoidDistance: float, optional
-        The distance in mm to use to avoid collisions with the fiducial
-        fibers. Default is 0, which means that targets will not be
-        invalidated based on their distance to the fiducials.
+    avoidFiducials: bool, optional
+        If True, combinations of Cobras and targets that may lead to
+        collisions with fiducial fibers will be avoided
     Returns
     =======
     LPProblem : the ILP problem object
@@ -514,7 +513,7 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                                  preassigned[ivis].keys(),t_observed,
                                  t_required, cobraSafetyMargin,
                                  cobraFeatureFlags, brokenCobrasMargin,
-                                 fiducialsAvoidDistance)
+                                 avoidFiducials)
         for tidx, thing in vis.items():
             tgt = targets[tidx]
                     

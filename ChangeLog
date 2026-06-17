@@ -1,6 +1,10 @@
 Recent changes to the ets_fiberalloc package,
 in reverse chronological order:
 
+- yet unreleased:
+  adjust to cobraOps 2.0.7
+    - use "avoidFiducials" instead of "fiducialsAvoidDistance"
+
 - v3.6:
   adjust to cobraOps 2.0.6
     - simpler bench creation
