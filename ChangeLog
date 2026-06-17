@@ -1,7 +1,7 @@
 Recent changes to the ets_fiberalloc package,
 in reverse chronological order:
 
-yet unreleased:
+- v3.7:
   https://pfs-jira.naoj.org/jira/browse/FIBERALLOC-61
   (Allow perturbation of target observation cost)
 
