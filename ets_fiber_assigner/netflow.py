@@ -266,6 +266,7 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                  cobraSafetyMargin=0.,
                  cobraFeatureFlags=None,
                  brokenCobrasMargin=0.,
+                 targetCostOffset=None,
                  avoidFiducials=True):
     """Build the ILP problem for a given observation task
 
@@ -406,9 +407,14 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
         This is given as a fraction of "brokenCobrasRmax", i.e. the maximum
         patrol area radius of any broken Cobra.
         Useful values should be in the range [0;1].
+    targetCostOffset: np.ndarray(float), same size as "targets"
+        per-target perturbation of the overall cost function, if this target
+        is observed. Used to break degeneracies and guarantee reproducible
+        assignments.
     avoidFiducials: bool, optional
         If True, combinations of Cobras and targets that may lead to
         collisions with fiducial fibers will be avoided
+
     Returns
     =======
     LPProblem : the ILP problem object
@@ -538,6 +544,8 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                     f = prob.addVar(makeName("STC_T", TC, tgt.ID), tmp, 1)
                     T_i[tidx].append(f)
                     STC_o[TC].append(f)
+                    if targetCostOffset is not None and targetCostOffset[tidx] != 0:
+                        prob.cost += f*targetCostOffset[tidx]
                     if len(STC_o[TC]) == 1:  # freshly created
                         # Science Target class node to sink
                         f = prob.addVar(makeName("STC_sink", TC), 0, None)
