@@ -1,9 +1,12 @@
 Recent changes to the ets_fiberalloc package,
 in reverse chronological order:
 
-- yet unreleased:
+- v3.8:
   adjust to cobraOps 2.0.7
     - use "avoidFiducials" instead of "fiducialsAvoidDistance"
+  CAUTION: this breaks backwards compatibility!
+  All calling codes that passed the "fiducialsAvoidDistance" parameter
+  to "buildProblem" need to switch to "avoidFiducials".
 
 - v3.7:
   https://pfs-jira.naoj.org/jira/browse/FIBERALLOC-61
