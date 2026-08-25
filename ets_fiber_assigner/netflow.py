@@ -871,9 +871,32 @@ class HighsProblem(LPProblem):
             # found); value() falls back to val() and lets HiGHS complain.
             self._colvals = None
 
+    def _checkSolved(self):
+        """Refuse to hand back a column vector that is not a solution.
+
+        A Gurobi variable simply has no value to read when the solve failed,
+        so the caller finds out at once. HiGHS instead returns an all-zero
+        column vector for an infeasible or unsolved model, which is
+        indistinguishable from a feasible solution that happens to assign
+        nothing -- a failed solve would be read back as an empty assignment
+        and silently treated as a valid one. So check the status explicitly.
+        """
+        status = self._prob.getModelStatus()
+        if status == self._highs.HighsModelStatus.kOptimal:
+            return
+        # A limit (time, iterations, ...) can stop the search once an
+        # incumbent has been found. That is a usable answer, just not a
+        # provably optimal one, so accept it rather than discarding it.
+        feasible = self._highs.SolutionStatus.kSolutionStatusFeasible
+        if self._prob.getInfo().primal_solution_status == feasible:
+            return
+        raise RuntimeError("HiGHS found no solution: "
+                           + self._prob.modelStatusToString(status))
+
     def solve(self):
         self._flush()
         self._prob.minimize(self.cost)
+        self._checkSolved()
         self._cacheSolution()
 
     def update(self):
