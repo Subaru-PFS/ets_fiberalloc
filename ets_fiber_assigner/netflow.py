@@ -752,6 +752,9 @@ class HighsProblem(LPProblem):
     """
 
     def __init__(self, name="problem", extraOptions=None):
+        # `name` is accepted so the backends are interchangeable, but highspy
+        # exposes no model-name API (only passColName/passRowName), so there
+        # is nothing to set it on. PulpProblem ignores it as well.
         LPProblem.__init__(self)
         import highspy
         self._highs = highspy
@@ -780,7 +783,9 @@ class HighsProblem(LPProblem):
         """
         var = self._highs.highs_var(self._ncols, self._prob)
         self._pending.append((name, lb, ub, is_integer))
-        self._bounds[self._ncols] = (lb, ub)
+        # float() so varBounds() reports the same type the other backends do,
+        # whatever the caller passed in.
+        self._bounds[self._ncols] = (float(lb), float(ub))
         self._ncols += 1
         return var
 
@@ -863,14 +868,15 @@ class HighsProblem(LPProblem):
         return self._colvals[var.index]
 
     def _cacheSolution(self):
+        """Read the whole solution vector once. Only called after _checkSolved.
+
+        HiGHS returns an all-zero vector rather than raising when there is no
+        solution, so guarding this with try/except never caught anything; the
+        status check in solve() is what rules that case out.
+        """
         import numpy as np
 
-        try:
-            self._colvals = np.asarray(self._prob.getSolution().col_value)
-        except Exception:
-            # No solution to read (infeasible, or stopped before one was
-            # found); value() falls back to val() and lets HiGHS complain.
-            self._colvals = None
+        self._colvals = np.asarray(self._prob.getSolution().col_value)
 
     def _checkSolved(self):
         """Refuse to hand back a column vector that is not a solution.
@@ -917,7 +923,7 @@ class HighsProblem(LPProblem):
             lb = lower
         if upper is not None:
             ub = upper
-        self._bounds[var.index] = (lb, ub)
+        self._bounds[var.index] = (float(lb), float(ub))
         self._colvals = None
         self._prob.changeColBounds(var.index, lb, ub)
 
