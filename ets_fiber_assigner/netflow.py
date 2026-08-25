@@ -825,8 +825,9 @@ class HighsProblem(LPProblem):
         inf = self._highs.kHighsInf
         lo = -inf if lo is None else lo
         hi = inf if hi is None else hi
-        # Mirrors the other backends: a 0/1 range means binary, anything else
-        # is a general integer variable.
+        # HiGHS has no separate binary type, so everything becomes an integer
+        # column and a 0/1 range is just one bounded to [0, 1] -- equivalent
+        # to the binary variables the other backends make for that case.
         var = self._newCol(name, lo, hi, True)
         self._vardict[name] = var
         return var
