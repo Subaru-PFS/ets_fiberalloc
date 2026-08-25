@@ -1,0 +1,48 @@
+Recent changes to the ets_fiberalloc package,
+in reverse chronological order:
+
+- v3.8:
+  adjust to cobraOps 2.0.7
+    - use "avoidFiducials" instead of "fiducialsAvoidDistance"
+  CAUTION: this breaks backwards compatibility!
+  All calling codes that passed the "fiducialsAvoidDistance" parameter
+  to "buildProblem" need to switch to "avoidFiducials".
+
+- v3.7:
+  https://pfs-jira.naoj.org/jira/browse/FIBERALLOC-61
+  (Allow perturbation of target observation cost)
+
+- v3.6:
+  adjust to cobraOps 2.0.6
+    - simpler bench creation
+    - new parameter "fiducialsAvoidDistance"
+      (no JIRA issue, since this is a temporary measure and will be
+      replaced in the future)
+
+- v3.5:
+  https://pfs-jira.naoj.org/jira/browse/FIBERALLOC-59
+  (add support for cobraOps parameter "brokenCobrasMargin")
+
+- v3.4:
+  https://pfs-jira.naoj.org/jira/browse/FIBERALLOC-56
+  (Disable trajectory collision checks in demo codes)
+  Netflow is no longer supposed to care about trajectory collisions,
+  because the provided trajectories don't match the real ones anyway.
+
+- v3.3:
+  https://pfs-jira.naoj.org/jira/browse/FIBERALLOC-55
+  (Add specific capabilities and requirements to fibers and targets)
+  This was added to account for the lack of an infrared spectrograph
+  for a subset of fibers.
+
+  provide experimental functionality for reporting exact package version
+  and versions of dependencies
+
+- v3.2:
+  allow reading target catalogs from FITS files
+
+- v3.1:
+  https://pfs-jira.naoj.org/jira/browse/FIBERALLOC-53
+  (Add a new parameter "safetyMargin" to target selection machinery)
+
+  update demos to use CollisionSimulator2

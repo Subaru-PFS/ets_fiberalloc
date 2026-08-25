@@ -35,7 +35,8 @@ def _get_colliding_pairs(bench, tpos, vis, dist):
 
 
 def _get_vis_and_elbow(bench, target, tpos, stage, preassigned_tgts,
-    t_observed, t_required, cobraSafetyMargin, cobraFeatureFlags):
+    t_observed, t_required, cobraSafetyMargin, cobraFeatureFlags,
+    brokenCobrasMargin, avoidFiducials):
     """Returns a dictionary that contains an entry for each active target
     in the current visit that can be observed by a least one Cobra.
     The value for each entry is a list of (cidx, elbowpos), where cidx is
@@ -47,8 +48,9 @@ def _get_vis_and_elbow(bench, target, tpos, stage, preassigned_tgts,
     checkCobraOpsVersion(1,0,0)
     tgroup = TargetGroup(np.array(tpos))
     tselect = RandomTargetSelector(bench, tgroup)
-    tselect.calculateAccessibleTargets(safetyMargin=0)
-    tselect.calculateAccessibleTargets(safetyMargin=cobraSafetyMargin)
+    tselect.calculateAccessibleTargets(safetyMargin=cobraSafetyMargin,
+                                       brokenCobrasMargin=brokenCobrasMargin,
+                                       avoidFiducials=avoidFiducials)
     tmp = tselect.accessibleTargetIndices
     elb = tselect.accessibleTargetElbows
     res = defaultdict(list)
@@ -263,6 +265,9 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                  preassigned=None,
                  cobraSafetyMargin=0.,
                  cobraFeatureFlags=None,
+                 brokenCobrasMargin=0.,
+                 targetCostOffset=None,
+                 avoidFiducials=True,
                  solver=None, solverOptions=None):
     """Build the ILP problem for a given observation task
 
@@ -405,6 +410,21 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
         options for the chosen backend, in that backend's own parameter
         names. Only used when `solver` is given.
 
+    brokenCobrasMargin: float
+        defines the radius around broken Cobras, in which potential
+        observation targets will not be assigned, to avoid collisions with
+        the broken Cobras.
+        This is given as a fraction of "brokenCobrasRmax", i.e. the maximum
+        patrol area radius of any broken Cobra.
+        Useful values should be in the range [0;1].
+    targetCostOffset: np.ndarray(float), same size as "targets"
+        per-target perturbation of the overall cost function, if this target
+        is observed. Used to break degeneracies and guarantee reproducible
+        assignments.
+    avoidFiducials: bool, optional
+        If True, combinations of Cobras and targets that may lead to
+        collisions with fiducial fibers will be avoided
+
     Returns
     =======
     LPProblem : the ILP problem object
@@ -516,7 +536,11 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
     for ivis in range(nvisits):
         print("  exposure {}".format(ivis+1))
         print("Calculating visibilities")
-        vis = _get_vis_and_elbow(bench, targets, tpos[ivis], stage, preassigned[ivis].keys(),t_observed, t_required, cobraSafetyMargin, cobraFeatureFlags)
+        vis = _get_vis_and_elbow(bench, targets, tpos[ivis], stage,
+                                 preassigned[ivis].keys(),t_observed,
+                                 t_required, cobraSafetyMargin,
+                                 cobraFeatureFlags, brokenCobrasMargin,
+                                 avoidFiducials)
         for tidx, thing in vis.items():
             tgt = targets[tidx]
                     
@@ -541,6 +565,8 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                     f = prob.addVar(makeName("STC_T", TC, tgt.ID), tmp, 1)
                     T_i[tidx].append(f)
                     STC_o[TC].append(f)
+                    if targetCostOffset is not None and targetCostOffset[tidx] != 0:
+                        prob.cost += f*targetCostOffset[tidx]
                     if len(STC_o[TC]) == 1:  # freshly created
                         # Science Target class node to sink
                         f = prob.addVar(makeName("STC_sink", TC), 0, None)
