@@ -695,7 +695,7 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
         n_obs = len(val)-1
         if "nobs_max" in classdict[key]:
             n_obs = classdict[key]["nobs_max"]
-        prob.add_constraint(makeName("ST", key[0], key[1]),
+        prob.add_constraint(makeName("ST", key),
                             prob.sum([v for v in val]) == n_obs)
 
     # Science targets inside a given program must not get more observation time
