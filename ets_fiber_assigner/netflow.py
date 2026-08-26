@@ -601,7 +601,6 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
                 if cobraMoveCost is not None:
                     dist = np.abs(bench.cobras.centers[cidx]-tpos[ivis][tidx])
                     tcost += cobraMoveCost(dist)
-                prob.cost += f*tcost
                 if blackDotPenalty is not None:
                     dist = np.min(np.abs(closestDotsList[cidx]-tpos[ivis][tidx]))
                     tcost += blackDotPenalty(dist)

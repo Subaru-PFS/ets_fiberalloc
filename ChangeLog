@@ -1,6 +1,10 @@
 Recent changes to the ets_fiberalloc package,
 in reverse chronological order:
 
+- not yet released:
+  bug fix by M. Onodera: avoid variable name collision
+    (https://pfs-jira.naoj.org/jira/browse/FIBERALLOC-63)
+
 - v3.8:
   adjust to cobraOps 2.0.7
     - use "avoidFiducials" instead of "fiducialsAvoidDistance"
