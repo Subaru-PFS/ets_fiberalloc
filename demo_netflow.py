@@ -2,7 +2,7 @@ import ets_fiber_assigner.netflow as nf
 import numpy as np
 from collections import defaultdict
 from getBench import getBench
-   
+
 # make runs reproducible
 np.random.seed(20)
 
@@ -90,7 +90,7 @@ alreadyObserved={}
 prob = nf.buildProblem(bench, tgt, tpos, classdict, t_obs,
                        vis_cost, cobraMoveCost=cobraMoveCost,
                        collision_distance=2., elbow_collisions=True,
-                       gurobi=False, gurobiOptions=gurobiOptions,
+                       solver="highs",
                        alreadyObserved=alreadyObserved, brokenCobrasMargin=1.)
 
 # print("writing problem to file ", mpsName)
