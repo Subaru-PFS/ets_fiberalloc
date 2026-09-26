@@ -1,7 +1,9 @@
 Recent changes to the ets_fiberalloc package,
 in reverse chronological order:
 
-- not yet released:
+- v3.9:
+  new ILP solver backend for HiGHS, contributed by M. Onodera
+    (https://pfs-jira.naoj.org/jira/browse/FIBERALLOC-62)
   bug fix by M. Onodera: avoid variable name collision
     (https://pfs-jira.naoj.org/jira/browse/FIBERALLOC-63)
   bug fix by M. Onodera: remove accidental double-counting of some
