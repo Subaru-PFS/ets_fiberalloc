@@ -14,10 +14,11 @@ However, it also depends on the "cobraOps" Python package, which currently
 has to be installed manually; see https://github.com/Subaru-PFS/ics_cobraOps/
 for details.
 
-The package allows to choose between the PULP package and the commercial
-(but free for academic use) Gurobi package for solving the network flow
-problem. One of those two needs to be installed and the appropriate flag needs
-to be set when calling the network solving routine `observeWithNetflow()`.
+The package allows to choose between the PULP package, the HiGHS package
+(installed as `highspy`) and the commercial (but free for academic use) Gurobi
+package for solving the network flow problem. One of those three needs to be
+installed and the appropriate flag needs to be set when calling the network
+solving routine `observeWithNetflow()`.
 
 ### Package installation
 
