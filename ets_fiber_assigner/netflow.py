@@ -1,3 +1,5 @@
+import array
+import logging
 import numpy as np
 from collections import defaultdict
 from astropy.table import Table
@@ -767,6 +769,64 @@ def buildProblem(bench, targets, tpos, classdict, tvisit, vis_cost=None,
     return prob
 
 
+class _RowBuffer(object):
+    """Rows collected by HighsProblem.add_constraint(), waiting for one addRows.
+
+    Five flat typed arrays (C int / double) rather than a list of expressions:
+    4-8 bytes per entry, extend() runs in C, and np.frombuffer turns them into
+    numpy arrays without a copy. The expressions themselves live in
+    HighsProblem._constraintdict only.
+    """
+
+    def __init__(self):
+        self.clear()
+
+    def clear(self):
+        self.idx = array.array("i")     # column indices, all rows concatenated
+        self.val = array.array("d")     # matching coefficients
+        self.len = array.array("i")     # nonzeros per row
+        self.lo = array.array("d")      # row lower bounds
+        self.hi = array.array("d")      # row upper bounds
+
+    def __len__(self):
+        return len(self.len)
+
+    def add(self, idxs, vals, lo, hi):
+        self.idx.extend(idxs)
+        self.val.extend(vals)
+        self.len.append(len(idxs))
+        self.lo.append(lo)
+        self.hi.append(hi)
+
+    def to_csr(self, ncols):
+        """Return (lo, hi, nnz, starts, idx, val) as Highs.addRows wants them.
+
+        Within each row the entries are ordered by column index, which is
+        what highs_linear_expression.unique_elements() does before addConstr
+        hands a row to HiGHS. Rows arrive here free of repeated columns
+        (add_constraint merges those), so a stable sort on a (row, column)
+        key reproduces that order exactly, and the matrix HiGHS stores --
+        and the .lp/.mps it writes -- is identical to the one-row-at-a-time
+        path. One integer key per entry sorts about 20x faster than
+        np.lexsort on the same data. Temporary memory is about 40 bytes per
+        nonzero.
+        """
+        m = len(self)
+        lens = np.frombuffer(self.len, dtype=np.intc)
+        idx = np.frombuffer(self.idx, dtype=np.intc)
+        val = np.frombuffer(self.val, dtype=np.float64)
+        lo = np.frombuffer(self.lo, dtype=np.float64)
+        hi = np.frombuffer(self.hi, dtype=np.float64)
+        # CSR row starts; addRows takes num_rows of them, no trailing sentinel.
+        # frombuffer views are read-only, so build starts as a fresh array.
+        starts = np.zeros(m, dtype=np.int32)
+        np.cumsum(lens[:-1], dtype=np.int32, out=starts[1:])
+        row_id = np.repeat(np.arange(m, dtype=np.int64), lens)
+        order = np.argsort(row_id * (ncols + 1) + idx, kind="stable")
+        return (lo, hi, idx.size, starts,
+                idx[order].astype(np.int32, copy=False), val[order])
+
+
 class HighsProblem(LPProblem):
     """HiGHS backend (https://highs.dev), reached through the highspy package.
 
@@ -774,6 +834,29 @@ class HighsProblem(LPProblem):
     22 real target lists: it finished the same 20 of them Gurobi did, at 1.08x
     the total runtime, with pointing counts agreeing to within the spread a
     single solver shows across repeated runs of the same input.
+
+    Columns, rows and bound changes are buffered on the Python side and
+    handed to HiGHS in bulk (addCols / addRows / changeColsBounds) the first
+    time something needs the complete model: solve(), update() and dump().
+    Column and row names are passed to HiGHS in dump() alone, because
+    HiGHS's own log refers to rows and columns by index whether or not they
+    are named -- to see names, read the file dump() writes.
+
+    varBounds() and changeVarBounds() are instance methods here (they read
+    self._bounds), while GurobiProblem and PulpProblem define them as
+    staticmethods. Calling them through an instance works for all three
+    backends; calling them through the class (HighsProblem.varBounds(var))
+    does not work for this one.
+
+    Options: output_flag is set to False first, then extraOptions is applied,
+    so a caller can turn HiGHS's log back on. highspy 1.15.1 defaults worth
+    knowing when comparing against Gurobi: mip_rel_gap 1e-4 (Gurobi's MIPGap
+    default is also 1e-4), mip_abs_gap 1e-6, threads 0 (automatic),
+    mip_detect_symmetry True, time_limit inf (when a limit stops the search,
+    _checkSolved accepts a feasible incumbent), presolve "choose",
+    random_seed 0.
+
+    Requires highspy >= 1.15 (module-level highs_var).
     """
 
     def __init__(self, name="problem", extraOptions=None):
@@ -789,10 +872,19 @@ class HighsProblem(LPProblem):
             for key, value in extraOptions.items():
                 self._prob.setOptionValue(key, value)
 
+        # Columns: reserved in _newCol(), created in _flush().
         self._ncols = 0
-        self._pending = []      # (name, lb, ub, is_integer) awaiting _flush()
-        self._bounds = {}       # column index -> (lb, ub), for varBounds()
+        self._pending = []      # is_integer per column awaiting _flush()
+        self._col_names = []    # one per column, passed to HiGHS in dump()
+        self._bounds = {}       # column index -> (lb, ub): the bounds HiGHS
+                                # gets at _flush(), and what varBounds() reports
+        self._bounds_changed = set()   # created columns whose _bounds moved
         self._colvals = None    # cached solution vector, see value()
+
+        # Rows: collected in add_constraint(), created in _flushRows().
+        self._rows = _RowBuffer()
+        self._row_names = []    # one per row, passed to HiGHS in dump()
+        self._nrow_flushes = 0  # addRows calls made, for the log
 
         # A free continuous variable the caller accumulates the objective onto
         # with `prob.cost += ...`, so by the time solve() sees it, cost is a
@@ -807,7 +899,8 @@ class HighsProblem(LPProblem):
         The column itself is not created until _flush(); see there for why.
         """
         var = self._highs.highs_var(self._ncols, self._prob)
-        self._pending.append((name, lb, ub, is_integer))
+        self._pending.append(is_integer)
+        self._col_names.append(name)
         # float() so varBounds() reports the same type the other backends do,
         # whatever the caller passed in.
         self._bounds[self._ncols] = (float(lb), float(ub))
@@ -815,7 +908,8 @@ class HighsProblem(LPProblem):
         return var
 
     def _flush(self):
-        """Create every reserved column in one call. Safe to call at any time.
+        """Create every reserved column and apply pending bound changes, in
+        bulk. Safe to call at any time.
 
         Adding columns one at a time through highspy costs about 50 us each,
         which is minutes of overhead on the million-variable problems this
@@ -823,33 +917,80 @@ class HighsProblem(LPProblem):
         roughly 180x faster. Since buildProblem() creates all of its variables
         before its first constraint, one deferred flush catches all of them.
         """
-        if not self._pending:
+        if not self._pending and not self._bounds_changed:
             return
-        import numpy as np
-
-        pending, self._pending = self._pending, []
-        n = len(pending)
-        first = self._ncols - n
-        lb = np.fromiter((c[1] for c in pending), dtype=np.float64, count=n)
-        ub = np.fromiter((c[2] for c in pending), dtype=np.float64, count=n)
-        empty_i = np.array([], dtype=np.int32)
-        # Zero objective coefficients: the objective is passed as an
-        # expression in solve(), not built up column by column.
-        self._prob.addCols(n, np.zeros(n), lb, ub, 0, empty_i, empty_i,
-                           np.array([]))
-
-        int_idx = np.fromiter(
-            (first + i for i, c in enumerate(pending) if c[3]),
-            dtype=np.int32)
-        if int_idx.size:
-            self._prob.changeColsIntegrality(
-                int_idx.size, int_idx,
-                np.full(int_idx.size, self._highs.HighsVarType.kInteger))
-
-        for i, col in enumerate(pending):
-            self._prob.passColName(first + i, col[0])
-
+        if self._pending:
+            pending, self._pending = self._pending, []
+            n = len(pending)
+            first = self._ncols - n
+            lb, ub = self._boundArrays(range(first, self._ncols))
+            empty_i = np.array([], dtype=np.int32)
+            # Zero objective coefficients: the objective is passed as an
+            # expression in solve(), not built up column by column.
+            self._prob.addCols(n, np.zeros(n), lb, ub, 0, empty_i, empty_i,
+                               np.array([]))
+            int_idx = np.fromiter(
+                (first + i for i, is_int in enumerate(pending) if is_int),
+                dtype=np.int32)
+            if int_idx.size:
+                self._prob.changeColsIntegrality(
+                    int_idx.size, int_idx,
+                    np.full(int_idx.size, self._highs.HighsVarType.kInteger))
+        if self._bounds_changed:
+            # changeVarBounds() on columns HiGHS already had; applied here,
+            # in one call, like Gurobi applies pending changes in update().
+            idx = np.fromiter(sorted(self._bounds_changed), dtype=np.int32)
+            lb, ub = self._boundArrays(idx)
+            self._prob.changeColsBounds(idx.size, idx, lb, ub)
+            self._bounds_changed.clear()
         self._colvals = None
+
+    def _boundArrays(self, indices):
+        lb = np.fromiter((self._bounds[i][0] for i in indices), dtype=np.float64)
+        ub = np.fromiter((self._bounds[i][1] for i in indices), dtype=np.float64)
+        return lb, ub
+
+    def _flushRows(self):
+        """Create every collected row in one addRows call. Idempotent.
+
+        Highs.addConstr costs about 19 us per row (unique_elements 9.5,
+        addRow 4.8, passRowName 0.9, wrapper 3), linear in the row count but
+        still 10-17 s per million rows. Handing the same rows to addRows as
+        one CSR block takes about 2 us per row including the sort.
+        """
+        self._flush()   # rows refer to columns, so those must exist first
+        m = len(self._rows)
+        if m == 0:
+            return
+        lo, hi, nnz, starts, idx, val = self._rows.to_csr(self._ncols)
+        status = self._prob.addRows(m, lo, hi, nnz, starts, idx, val)
+        if status != self._highs.HighsStatus.kOk:
+            raise RuntimeError("HiGHS addRows failed: " + str(status))
+        self._rows.clear()  # _row_names stays: dump() still needs the names
+        self._nrow_flushes += 1
+        logging.getLogger(__name__).info(
+            "HighsProblem: row flush #%d, %d rows, %d nonzeros",
+            self._nrow_flushes, m, nnz)
+        self._colvals = None
+
+    def _flushAll(self):
+        """Bring the HiGHS model up to date with everything added so far."""
+        self._flush()
+        self._flushRows()
+
+    def _passNames(self):
+        """Hand HiGHS every column and row name. Only dump() needs them.
+
+        There is no bulk-naming API, so this is one call per name, about
+        1 us each; writeModel itself is far slower than that, so simply
+        repeating it on every dump() is cheaper than tracking what HiGHS
+        has already been told. Call after _flushAll(): a name can only be
+        attached to a column or row that exists.
+        """
+        for i, name in enumerate(self._col_names):
+            self._prob.passColName(i, name)
+        for i, name in enumerate(self._row_names):
+            self._prob.passRowName(i, name)
 
     def addVar(self, name, lo, hi):
         inf = self._highs.kHighsInf
@@ -863,9 +1004,25 @@ class HighsProblem(LPProblem):
         return var
 
     def add_constraint(self, name, constraint):
-        self._flush()
+        bounds = constraint.bounds
+        if bounds is None:
+            # Same condition, and the same moment, at which Highs.addConstr
+            # would have refused the expression.
+            raise ValueError(
+                "Constraint bounds must be set via comparison (>=, ==, <=)")
         self._constraintdict[name] = constraint
-        self._prob.addConstr(constraint, name=name)
+        idxs, vals = constraint.idxs, constraint.vals
+        if len(set(idxs)) != len(idxs):
+            # A column appearing more than once in one row (buildProblem does
+            # not produce these, but keep the general case right). Let
+            # highspy's own unique_elements() merge them so the coefficients
+            # come out bit-identical to what addConstr would have stored.
+            u_idx, u_val = constraint.unique_elements()
+            idxs, vals = u_idx.tolist(), u_val.tolist()
+        # constant is ignored on purpose: the comparison that set `bounds`
+        # already moved it to the right-hand side, exactly as addConstr does.
+        self._rows.add(idxs, vals, bounds[0], bounds[1])
+        self._row_names.append(name)
 
     def add_lazy_constraint(self, name, constraint):
         """HiGHS has no lazy-constraint hint, so these go in as ordinary ones.
@@ -887,9 +1044,21 @@ class HighsProblem(LPProblem):
         quadratic, and takes about an hour on the 500k-column problems this
         module produces, against roughly 20 s for the solve itself.
         getSolution() costs about a millisecond, once.
+
+        Raises RuntimeError when there is no solution to read: before
+        solve(), after a solve() that failed, for a variable added since the
+        last solve(), and once a change -- new columns or rows, or
+        changeVarBounds() -- has reached HiGHS through update(), dump() or
+        solve(). Until that flush the previous solution stays readable. This
+        is the rule Gurobi follows as well: while a modification is pending,
+        var.X can still be read; once update() has applied it, var.X raises.
+        HiGHS itself would hand back 0.0 or the previous solution in every
+        one of these cases, which a caller cannot tell apart from a genuine
+        assignment.
         """
-        if self._colvals is None:
-            return self._prob.val(var)
+        if self._colvals is None or var.index >= self._colvals.size:
+            raise RuntimeError("HighsProblem.value(): no valid solution for "
+                               "this variable; call solve() (again) first")
         return self._colvals[var.index]
 
     def _cacheSolution(self):
@@ -899,8 +1068,6 @@ class HighsProblem(LPProblem):
         solution, so guarding this with try/except never caught anything; the
         status check in solve() is what rules that case out.
         """
-        import numpy as np
-
         self._colvals = np.asarray(self._prob.getSolution().col_value)
 
     def _checkSolved(self):
@@ -926,31 +1093,42 @@ class HighsProblem(LPProblem):
                            + self._prob.modelStatusToString(status))
 
     def solve(self):
-        self._flush()
+        self._colvals = None    # a failed solve must not leave an old vector
+        self._flushAll()
         self._prob.minimize(self.cost)
         self._checkSolved()
         self._cacheSolution()
 
     def update(self):
-        self._flush()
+        self._flushAll()
 
     def dump(self, filename):
-        self._flush()
+        self._flushAll()
+        self._passNames()
+        # The objective reaches HiGHS in solve() only, so a file written
+        # before solve() has an empty objective. GurobiProblem.dump() behaves
+        # the same way (its setObjective is in solve() as well).
         self._prob.writeModel(filename)
 
     def varBounds(self, var):
         return self._bounds[var.index]
 
     def changeVarBounds(self, var, lower=None, upper=None):
-        self._flush()
+        """Record new bounds; they reach HiGHS at the next flush.
+
+        A column that is itself still pending is simply created with the new
+        bounds. One that HiGHS already has is queued for changeColsBounds()
+        in _flush(). Either way nothing is sent now, the same way a Gurobi
+        bound change stays pending until update() or optimize().
+        """
         lb, ub = self._bounds[var.index]
         if lower is not None:
             lb = lower
         if upper is not None:
             ub = upper
         self._bounds[var.index] = (float(lb), float(ub))
-        self._colvals = None
-        self._prob.changeColBounds(var.index, lb, ub)
+        if var.index < self._ncols - len(self._pending):
+            self._bounds_changed.add(var.index)
 
 
 class Telescope(object):
