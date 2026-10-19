@@ -1,3 +1,4 @@
+import tracemalloc
 from collections import defaultdict
 
 import numpy as np
@@ -77,6 +78,27 @@ def test_target_on_elbow_segment_end_and_duplicates():
            3: [(0, 1 + 0j), (1, 5 + 0j)]}
     assert _as_lists(_get_elbow_collisions(bench, tpos, vis, 2.0)) == \
         _as_lists(_reference(bench, tpos, vis, 2.0))
+
+
+def test_crowded_cobras_keep_memory_bounded():
+    # 3000 targets around two neighbouring Cobras: one call over all
+    # (target, neighbour target) combinations would need ~9e6-element arrays
+    rng = np.random.default_rng(1)
+    bench = _LineBench(2)
+    tpos = list(4.0 + 3.0 * (rng.random(3000) - 0.5)
+                + 3j * (rng.random(3000) - 0.5))
+    vis = {tidx: [(cidx, bench.centers[cidx] + 2.4 * np.exp(1j * rng.uniform(0, 2 * np.pi)))
+                  for cidx in (0, 1)] for tidx in range(len(tpos))}
+    # a small collision distance keeps the result itself small, so the peak
+    # measures the temporary arrays
+    tracemalloc.start()
+    try:
+        res = _get_elbow_collisions(bench, tpos, vis, 0.01)
+        peak = tracemalloc.get_traced_memory()[1]
+    finally:
+        tracemalloc.stop()
+    assert peak < 64 * 2**20
+    assert _as_lists(res) == _as_lists(_reference(bench, tpos, vis, 0.01))
 
 
 def test_no_neighbours_with_targets():
