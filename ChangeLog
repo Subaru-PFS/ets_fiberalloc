@@ -1,6 +1,10 @@
 Recent changes to the ets_fiberalloc package,
 in reverse chronological order:
 
+- unreleased:
+  compute elbow collision distances once per Cobra instead of once per
+  Cobra-target pair (same constraints, faster problem setup)
+
 - v3.9:
   new ILP solver backend for HiGHS, contributed by M. Onodera
     (https://pfs-jira.naoj.org/jira/browse/FIBERALLOC-62)

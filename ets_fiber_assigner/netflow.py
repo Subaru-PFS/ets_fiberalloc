@@ -93,13 +93,16 @@ def _get_elbow_collisions(bench, tpos, vis, dist):
             i2 = np.unique(i2).astype(int)
             # for each target visible by this cobra and the corresponding elbow
             # position, find all targets which are too close to the "upper arm"
-            # of the cobra
-            for tidx, elbowpos in thing:
-                ebp = np.full(len(i2), elbowpos)
-                tp = np.full(len(i2), tpos[tidx])
-                ti2 = tpos[i2]
-                d = CollisionSimulator.distancesToLineSegments(ti2, tp, ebp)
-                res[(cidx, tidx)] += list(i2[d < dist])
+            # of the cobra. All the (target, neighbour target) combinations of
+            # this cobra are computed in a single call
+            tidx = [t for t, _ in thing]
+            elbowpos = np.array([e for _, e in thing])
+            n2 = len(i2)
+            d = CollisionSimulator.distancesToLineSegments(
+                np.tile(tpos[i2], len(tidx)), np.repeat(tpos[tidx], n2),
+                np.repeat(elbowpos, n2)).reshape(len(tidx), n2)
+            for k, t in enumerate(tidx):
+                res[(cidx, t)] += list(i2[d[k] < dist])
     return res
 
 
